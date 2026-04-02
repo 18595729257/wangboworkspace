@@ -1476,9 +1476,26 @@ async function start() {
     // 初始化 WebSocket
     initWebSocket(server);
     console.log('');
+
+    // HTTPS 服务器（直接监听443，绕过Nginx TLS问题）
+    const https = require('https');
+    const fsSync = require('fs');
+    try {
+      const httpsOptions = {
+        key: fsSync.readFileSync('/etc/letsencrypt/live/xinbingcloudprint.top/privkey.pem'),
+        cert: fsSync.readFileSync('/etc/letsencrypt/live/xinbingcloudprint.top/fullchain.pem')
+      };
+      const httpsServer = https.createServer(httpsOptions, app).listen(443, '0.0.0.0', () => {
+        console.log('   HTTPS: https://0.0.0.0:443 (直连)');
+      });
+      initWebSocket(httpsServer);
+    } catch(e) {
+      console.log('HTTPS 启动失败:', e.message);
+    }
   } catch (err) {
     console.error('启动失败:', err.message);
     console.error('请检查 MySQL 配置和 .env 文件');
+
     process.exit(1);
   }
 }
