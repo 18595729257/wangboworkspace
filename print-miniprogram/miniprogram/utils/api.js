@@ -105,28 +105,44 @@ function getQueueStatus() {
   return get('/api/public/queue-status')
 }
 
-// 上传文件
+// 上传文件（base64方式，兼容微信开发者工具TLS问题）
 function uploadFile(filePath, name) {
   return new Promise(function (resolve, reject) {
-    var uploadUrl = BASE_URL + '/api/public/upload'
-    console.log('[上传] 开始:', uploadUrl)
+    var uploadUrl = BASE_URL + '/api/public/upload-base64'
+    console.log('[上传] 开始(base64):', uploadUrl)
     console.log('[上传] 文件:', filePath)
-    wx.uploadFile({
-      url: uploadUrl,
+    wx.getFileSystemManager().readFile({
       filePath: filePath,
-      name: 'file',
-      header: { 'Content-Type': 'multipart/form-data' },
-      success: function (res) {
-        console.log('[上传] 响应:', res.statusCode, res.data)
-        try {
-          var data = JSON.parse(res.data)
-          if (data.code === 200) resolve(data)
-          else reject(data)
-        } catch (e) { reject({ msg: '上传失败' }) }
+      encoding: 'base64',
+      success: function (fileRes) {
+        console.log('[上传] 读取成功, 大小:', fileRes.data.length)
+        wx.request({
+          url: uploadUrl,
+          method: 'POST',
+          data: {
+            fileName: name || 'upload.pdf',
+            fileData: fileRes.data,
+            fileType: 'application/pdf'
+          },
+          header: { 'Content-Type': 'application/json' },
+          timeout: 60000,
+          success: function (res) {
+            console.log('[上传] 响应:', res.statusCode, JSON.stringify(res.data).substring(0, 200))
+            if (res.statusCode === 200 && res.data.code === 200) {
+              resolve(res.data)
+            } else {
+              reject(res.data || { msg: '上传失败' })
+            }
+          },
+          fail: function (err) {
+            console.error('[上传] 失败:', JSON.stringify(err))
+            reject({ msg: '网络错误', error: err })
+          }
+        })
       },
       fail: function (err) {
-        console.error('[上传] 失败:', JSON.stringify(err))
-        reject({ msg: '网络错误', error: err })
+        console.error('[上传] 读取文件失败:', JSON.stringify(err))
+        reject({ msg: '读取文件失败', error: err })
       }
     })
   })
