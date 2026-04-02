@@ -1,0 +1,42 @@
+// utils/format.wxs - WXML格式化工具
+function formatPrice(price) {
+  if (price === null || price === undefined || price === '') return '0.00'
+  var num = parseFloat(price)
+  if (isNaN(num)) return '0.00'
+  return num.toFixed(2)
+}
+
+function formatSize(bytes) {
+  if (!bytes) return '0 KB'
+  return (bytes / 1024).toFixed(1) + ' KB'
+}
+
+function formatTime(dateStr) {
+  if (!dateStr) return ''
+  var d = parseDate(dateStr)
+  if (!d) return dateStr
+  var y = d.getFullYear()
+  var m = padZero(d.getMonth() + 1)
+  var day = padZero(d.getDate())
+  var h = padZero(d.getHours())
+  var min = padZero(d.getMinutes())
+  return y + '-' + m + '-' + day + ' ' + h + ':' + min
+}
+
+function parseDate(str) {
+  if (typeof str !== 'string') return null
+  var s = str.replace('T', ' ').substring(0, 19)
+  var t = Date.parse(s)
+  if (!isNaN(t)) return new Date(t)
+  return null
+}
+
+function padZero(n) {
+  return n < 10 ? '0' + n : '' + n
+}
+
+module.exports = {
+  formatPrice: formatPrice,
+  formatSize: formatSize,
+  formatTime: formatTime
+}

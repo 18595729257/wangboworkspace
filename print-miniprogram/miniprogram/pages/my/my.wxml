@@ -1,0 +1,108 @@
+<!--pages/my/my.wxml-->
+<view class="container">
+  <!-- 用户信息 -->
+  <view class="hero-card">
+    <view class="flex">
+      <image class="avatar" src="{{userInfo.avatarUrl || '/images/default-avatar.png'}}" mode="aspectFill"></image>
+      <view class="user-info">
+        <view wx:if="{{isLogin}}" class="username">{{userInfo.nickName || '微信用户'}}</view>
+        <view wx:if="{{isLogin}}" class="edit-link" bindtap="goLoginPage">编辑资料 ›</view>
+        <view class="username" wx:else>游客</view>
+        <button wx:if="{{!isLogin}}" class="login-pill" bindtap="onLogin">微信一键登录</button>
+      </view>
+    </view>
+    <view wx:if="{{isLogin}}" class="points-strip">
+      <view class="flex-between" style="width:100%">
+        <view>
+          <text class="points-num">{{points}}</text>
+          <text class="points-label">积分</text>
+        </view>
+        <view class="points-link" bindtap="goToPoints">积分明细 ›</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 订单统计 -->
+  <view class="card">
+    <view class="card-title">我的订单</view>
+    <view class="stats-row">
+      <view class="stat-item" data-status="pending" bindtap="goToOrders">
+        <view class="stat-num">{{stats.pending}}</view>
+        <view class="stat-label">待支付</view>
+      </view>
+      <view class="stat-item" data-status="processing" bindtap="goToOrders">
+        <view class="stat-num">{{stats.processing}}</view>
+        <view class="stat-label">打印中</view>
+      </view>
+      <view class="stat-item" data-status="completed" bindtap="goToOrders">
+        <view class="stat-num">{{stats.completed}}</view>
+        <view class="stat-label">已完成</view>
+      </view>
+      <view class="stat-item" data-status="" bindtap="goToOrders">
+        <view class="stat-num">{{stats.total}}</view>
+        <view class="stat-label">全部</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 快捷操作 -->
+  <view class="card">
+    <view class="card-title">快捷操作</view>
+    <view class="menu-list">
+      <view class="menu-item" bindtap="goToUpload">
+        <text class="menu-icon">↗</text>
+        <text class="menu-text">开始打印</text>
+        <text class="menu-arrow">›</text>
+      </view>
+      <view class="menu-item" bindtap="goToOrders" data-status="">
+        <text class="menu-icon">≡</text>
+        <text class="menu-text">订单记录</text>
+        <text class="menu-arrow">›</text>
+      </view>
+      <view wx:if="{{isLogin}}" class="menu-item" bindtap="goToPoints">
+        <text class="menu-icon">⭐</text>
+        <text class="menu-text">积分中心</text>
+        <text class="menu-arrow">›</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 使用说明 -->
+  <view class="card">
+    <view class="card-title">使用说明</view>
+    <view class="steps">
+      <view class="step-item">
+        <view class="step-num">1</view>
+        <view class="step-text">上传需要打印的文件</view>
+      </view>
+      <view class="step-item">
+        <view class="step-num">2</view>
+        <view class="step-text">选择打印设置并支付</view>
+      </view>
+      <view class="step-item">
+        <view class="step-num">3</view>
+        <view class="step-text">自动排队打印</view>
+      </view>
+      <view class="step-item">
+        <view class="step-num">4</view>
+        <view class="step-text">在打印机处取件</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 退出/切换账号 -->
+  <view wx:if="{{isLogin}}" class="card">
+    <view class="menu-list">
+      <view class="menu-item" bindtap="switchAccount">
+        <text class="menu-icon">↔</text>
+        <text class="menu-text">切换账号</text>
+        <text class="menu-arrow">›</text>
+      </view>
+      <view class="menu-item" bindtap="doLogout">
+        <text class="menu-icon" style="color:var(--red)">⊘</text>
+        <text class="menu-text" style="color:var(--red)">退出登录</text>
+        <text class="menu-arrow">›</text>
+      </view>
+    </view>
+  </view>
+</view>

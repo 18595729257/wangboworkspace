@@ -1,0 +1,171 @@
+/* pages/id-card-copy/id-card-copy.wxss */
+
+/* 证件类型网格 */
+.type-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14rpx;
+}
+
+.type-item {
+  padding: 14rpx 26rpx;
+  border-radius: var(--radius-full);
+  background: var(--bg);
+  font-size: 26rpx;
+  color: var(--label-secondary);
+  font-weight: 500;
+}
+
+.type-item.active {
+  background: var(--blue);
+  color: #ffffff;
+}
+
+/* 选项行 */
+.option-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 18rpx 0;
+  border-bottom: 1rpx solid var(--separator);
+}
+
+.option-row:last-child { border-bottom: none; }
+
+.option-label {
+  font-size: 28rpx;
+  color: var(--label);
+}
+
+.option-group {
+  display: flex;
+  gap: 12rpx;
+}
+
+.option-pill {
+  padding: 12rpx 28rpx;
+  border-radius: var(--radius-full);
+  background: var(--bg);
+  font-size: 26rpx;
+  color: var(--label-secondary);
+  font-weight: 500;
+}
+
+.option-pill.active {
+  background: var(--blue);
+  color: #ffffff;
+}
+
+/* 份数控制 */
+.copies-control {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+}
+
+.copies-btn {
+  width: 56rpx;
+  height: 56rpx;
+  border-radius: 50%;
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28rpx;
+  color: var(--label);
+}
+
+.copies-num {
+  font-size: 32rpx;
+  font-weight: 600;
+  min-width: 40rpx;
+  text-align: center;
+}
+
+/* 上传区域 */
+.upload-row {
+  display: flex;
+  gap: 20rpx;
+}
+
+.upload-box {
+  flex: 1;
+  aspect-ratio: 1.5;
+  border: 3rpx dashed var(--separator-strong);
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  position: relative;
+  overflow: hidden;
+}
+
+.upload-preview {
+  width: 100%;
+  height: 100%;
+}
+
+.upload-remove {
+  position: absolute;
+  top: 8rpx;
+  right: 8rpx;
+  width: 40rpx;
+  height: 40rpx;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.4);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20rpx;
+}
+
+.upload-plus {
+  font-size: 56rpx;
+  color: var(--label-tertiary);
+  line-height: 1;
+}
+
+.upload-label {
+  font-size: 24rpx;
+  color: var(--label-secondary);
+  margin-top: 8rpx;
+}
+
+/* 价格 */
+.price-summary {
+  margin-top: 8rpx;
+}
+
+.price-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.price-key {
+  font-size: 28rpx;
+  color: var(--label-secondary);
+}
+
+.price-val {
+  font-size: 28rpx;
+  font-weight: 600;
+}
+
+.price-large {
+  font-size: 48rpx;
+  color: var(--red);
+  font-weight: 700;
+}
+
+/* 提交 */
+.submit-btn {
+  margin-top: 24rpx;
+  width: 100%;
+  height: 96rpx;
+  line-height: 96rpx;
+  font-size: 34rpx;
+}

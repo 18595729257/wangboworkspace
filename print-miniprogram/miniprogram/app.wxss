@@ -1,0 +1,234 @@
+/* app.wxss - Apple Design System for Mini Program */
+
+/* ===== Design Tokens ===== */
+page {
+  --blue: #007AFF;
+  --green: #34C759;
+  --orange: #FF9500;
+  --red: #FF3B30;
+  --purple: #AF52DE;
+  --teal: #5AC8FA;
+
+  --bg: #F2F2F7;
+  --card: #FFFFFF;
+  --separator: rgba(60, 60, 67, 0.08);
+  --separator-strong: rgba(60, 60, 67, 0.15);
+
+  --label: #1C1C1E;
+  --label-secondary: #8E8E93;
+  --label-tertiary: #C7C7CC;
+
+  --radius: 16rpx;
+  --radius-sm: 10rpx;
+  --radius-lg: 24rpx;
+  --radius-full: 999rpx;
+
+  --shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 8rpx 30rpx rgba(0, 0, 0, 0.08);
+
+  /* safe-area 兼容: constant() for iOS 11.0-11.2, env() for iOS 11.2+ */
+  --safe-bottom: constant(safe-area-inset-bottom);
+  --safe-bottom: env(safe-area-inset-bottom);
+
+  background-color: var(--bg);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Helvetica Neue", "HarmonyOS Sans", sans-serif;
+  font-size: 28rpx;
+  color: var(--label);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ===== Layout ===== */
+.container {
+  padding: 24rpx 30rpx;
+  box-sizing: border-box;
+  min-height: 100vh;
+}
+
+/* ===== Cards ===== */
+.card {
+  background-color: var(--card);
+  border-radius: var(--radius);
+  padding: 30rpx;
+  margin-bottom: 24rpx;
+  box-shadow: var(--shadow);
+}
+
+.card-title {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: var(--label);
+  margin-bottom: 20rpx;
+  letter-spacing: -0.2rpx;
+}
+
+/* ===== Buttons ===== */
+.btn-primary {
+  background: var(--blue);
+  color: #ffffff;
+  border-radius: var(--radius);
+  padding: 28rpx 0;
+  font-size: 32rpx;
+  font-weight: 600;
+  text-align: center;
+  border: none;
+  letter-spacing: 0.5rpx;
+  transition: opacity 0.15s;
+}
+
+.btn-primary:active {
+  opacity: 0.85;
+}
+
+.btn-primary::after {
+  border: none;
+}
+
+.btn-primary[disabled] {
+  background: var(--label-tertiary);
+  opacity: 1;
+}
+
+.btn-secondary {
+  background-color: var(--card);
+  color: var(--blue);
+  border-radius: var(--radius);
+  padding: 28rpx 0;
+  font-size: 32rpx;
+  font-weight: 600;
+  text-align: center;
+  border: none;
+  box-shadow: var(--shadow);
+}
+
+.btn-secondary:active {
+  background-color: var(--bg);
+}
+
+.btn-secondary::after {
+  border: none;
+}
+
+/* ===== Price ===== */
+.price {
+  color: var(--red);
+  font-weight: 600;
+}
+
+.price-large {
+  font-size: 48rpx;
+  color: var(--red);
+  font-weight: 700;
+  letter-spacing: -0.5rpx;
+}
+
+/* ===== Tags / Badges ===== */
+.tag {
+  display: inline-block;
+  padding: 6rpx 16rpx;
+  border-radius: var(--radius-full);
+  font-size: 22rpx;
+  font-weight: 600;
+  letter-spacing: 0.3rpx;
+}
+
+.tag-pending {
+  background: rgba(255, 149, 0, 0.12);
+  color: #C76100;
+}
+
+.tag-paid {
+  background: rgba(0, 122, 255, 0.1);
+  color: var(--blue);
+}
+
+.tag-printing {
+  background: rgba(175, 82, 222, 0.1);
+  color: var(--purple);
+}
+
+.tag-completed {
+  background: rgba(52, 199, 89, 0.1);
+  color: #1B963F;
+}
+
+.tag-cancelled {
+  background: rgba(255, 59, 48, 0.08);
+  color: var(--red);
+}
+
+/* ===== Divider ===== */
+.divider {
+  height: 1rpx;
+  background-color: var(--separator);
+  margin: 24rpx 0;
+}
+
+/* ===== Flex Utilities ===== */
+.flex {
+  display: flex;
+  align-items: center;
+}
+
+.flex-between {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.flex-center {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* ===== Typography ===== */
+.text-muted {
+  color: var(--label-secondary);
+  font-size: 24rpx;
+}
+
+.text-small {
+  font-size: 24rpx;
+}
+
+/* ===== Empty State ===== */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 120rpx 0;
+  color: var(--label-secondary);
+}
+
+.empty-state image {
+  width: 180rpx;
+  height: 180rpx;
+  margin-bottom: 30rpx;
+  opacity: 0.6;
+}
+
+/* ===== Loading ===== */
+.loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 80rpx 0;
+  color: var(--label-secondary);
+  font-size: 28rpx;
+}
+
+.no-more {
+  text-align: center;
+  padding: 40rpx 0;
+  font-size: 24rpx;
+  color: var(--label-tertiary);
+}
+
+.loading-more {
+  text-align: center;
+  padding: 30rpx 0;
+  font-size: 24rpx;
+  color: var(--label-secondary);
+}

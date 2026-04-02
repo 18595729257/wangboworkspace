@@ -1,0 +1,81 @@
+<!--pages/id-card-copy/id-card-copy.wxml-->
+<view class="container">
+  <!-- 证件类型选择 -->
+  <view class="card">
+    <view class="card-title">证件类型</view>
+    <view class="type-grid">
+      <view wx:for="{{cardTypes}}" wx:key="id"
+        class="type-item {{selectedType === item.id ? 'active' : ''}}"
+        data-type="{{item.id}}" bindtap="selectType">
+        <text class="type-name">{{item.name}}</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 复印选项 -->
+  <view class="card">
+    <view class="card-title">复印设置</view>
+    <view class="option-row">
+      <text class="option-label">颜色</text>
+      <view class="option-group">
+        <view class="option-pill {{colorMode === 'bw' ? 'active' : ''}}" data-mode="bw" bindtap="setColorMode">黑白</view>
+        <view class="option-pill {{colorMode === 'color' ? 'active' : ''}}" data-mode="color" bindtap="setColorMode">彩色</view>
+      </view>
+    </view>
+    <view class="option-row">
+      <text class="option-label">排列</text>
+      <view class="option-group">
+        <view class="option-pill {{layout === 'double' ? 'active' : ''}}" data-layout="double" bindtap="setLayout">双图</view>
+        <view class="option-pill {{layout === 'single' ? 'active' : ''}}" data-layout="single" bindtap="setLayout">单图</view>
+      </view>
+    </view>
+    <view class="option-row">
+      <text class="option-label">份数</text>
+      <view class="copies-control">
+        <view class="copies-btn" bindtap="setCopies" data-val="{{copies - 1}}">−</view>
+        <text class="copies-num">{{copies}}</text>
+        <view class="copies-btn" bindtap="setCopies" data-val="{{copies + 1}}">＋</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 上传区域 -->
+  <view class="card">
+    <view class="card-title">上传证件</view>
+    <view class="upload-row">
+      <view class="upload-box" bindtap="chooseFront">
+        <block wx:if="{{frontImage}}">
+          <image class="upload-preview" src="{{frontImage}}" mode="aspectFill"></image>
+          <view class="upload-remove" catchtap="removeFront">✕</view>
+        </block>
+        <block wx:else>
+          <view class="upload-plus">＋</view>
+          <view class="upload-label">正面</view>
+        </block>
+      </view>
+      <view class="upload-box" bindtap="chooseBack">
+        <block wx:if="{{backImage}}">
+          <image class="upload-preview" src="{{backImage}}" mode="aspectFill"></image>
+          <view class="upload-remove" catchtap="removeBack">✕</view>
+        </block>
+        <block wx:else>
+          <view class="upload-plus">＋</view>
+          <view class="upload-label">反面</view>
+        </block>
+      </view>
+    </view>
+  </view>
+
+  <!-- 价格 & 提交 -->
+  <view class="card price-summary">
+    <view class="price-row">
+      <text class="price-key">合计</text>
+      <text class="price-val price-large">¥{{totalPrice}}</text>
+    </view>
+  </view>
+
+  <button class="btn-primary submit-btn" disabled="{{!frontImage || loading}}" bindtap="submitOrder">
+    <text wx:if="{{loading}}">提交中...</text>
+    <text wx:else>提交订单 ¥{{totalPrice}}</text>
+  </button>
+</view>

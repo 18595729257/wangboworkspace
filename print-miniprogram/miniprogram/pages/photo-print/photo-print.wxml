@@ -1,0 +1,87 @@
+<!--pages/photo-print/photo-print.wxml-->
+<view class="container">
+  <!-- 照片类别 -->
+  <view class="card">
+    <view class="card-title">照片类型</view>
+    <view class="cat-list">
+      <view wx:for="{{categories}}" wx:key="id"
+        class="cat-item {{selectedCategory === item.id ? 'active' : ''}}"
+        data-id="{{item.id}}" bindtap="selectCategory">
+        <view class="cat-main">
+          <text class="cat-name">{{item.name}}</text>
+          <text class="cat-desc">{{item.desc}}</text>
+        </view>
+        <view class="cat-price">
+          <text wx:if="{{item.id.indexOf('life') === 0}}">¥{{item.price_1}}/张</text>
+          <text wx:else>¥{{item.price_1}}起</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 证件照尺寸 -->
+  <view wx:if="{{!isLife}}" class="card">
+    <view class="card-title">照片尺寸</view>
+    <view class="option-group">
+      <view class="option-pill {{photoSize === '1' ? 'active' : ''}}" data-size="1" bindtap="setSize">1寸（25×35mm）</view>
+      <view class="option-pill {{photoSize === '2' ? 'active' : ''}}" data-size="2" bindtap="setSize">2寸（35×49mm）</view>
+    </view>
+  </view>
+
+  <!-- 底色选择 -->
+  <view wx:if="{{selectedCategory === 'idphoto_bg'}}" class="card">
+    <view class="card-title">底色选择</view>
+    <view class="bg-options">
+      <view class="bg-item {{bgColor === 'white' ? 'active' : ''}}" data-color="white" bindtap="setBgColor">
+        <view class="bg-preview bg-white"></view>
+        <text>白底</text>
+      </view>
+      <view class="bg-item {{bgColor === 'blue' ? 'active' : ''}}" data-color="blue" bindtap="setBgColor">
+        <view class="bg-preview bg-blue"></view>
+        <text>蓝底</text>
+      </view>
+      <view class="bg-item {{bgColor === 'red' ? 'active' : ''}}" data-color="red" bindtap="setBgColor">
+        <view class="bg-preview bg-red"></view>
+        <text>红底</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 上传照片 -->
+  <view class="card">
+    <view class="card-title">上传照片</view>
+    <view class="upload-area" bindtap="chooseImage">
+      <block wx:if="{{image}}">
+        <image class="upload-preview" src="{{image}}" mode="aspectFill"></image>
+        <view class="upload-remove" catchtap="removeImage">✕</view>
+      </block>
+      <block wx:else>
+        <view class="upload-plus">＋</view>
+        <view class="upload-hint">点击上传照片</view>
+      </block>
+    </view>
+  </view>
+
+  <!-- 份数 -->
+  <view class="card">
+    <view class="card-title">打印份数</view>
+    <view class="copies-control">
+      <view class="copies-btn" data-val="{{copies - 1}}" bindtap="setCopies">−</view>
+      <text class="copies-num">{{copies}}</text>
+      <view class="copies-btn" data-val="{{copies + 1}}" bindtap="setCopies">＋</view>
+    </view>
+  </view>
+
+  <!-- 提交 -->
+  <view class="card price-summary">
+    <view class="price-row">
+      <text class="price-key">合计</text>
+      <text class="price-val price-large">¥{{totalPrice}}</text>
+    </view>
+  </view>
+
+  <button class="btn-primary submit-btn" disabled="{{!image || loading}}" bindtap="submitOrder">
+    <text wx:if="{{loading}}">提交中...</text>
+    <text wx:else>提交订单 ¥{{totalPrice}}</text>
+  </button>
+</view>

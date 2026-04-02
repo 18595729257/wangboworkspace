@@ -1,0 +1,68 @@
+<!--pages/points/points.wxml-->
+<view class="container">
+  <!-- 积分概览 -->
+  <view class="card points-overview">
+    <view class="points-value">{{points}}</view>
+    <view class="points-label">当前积分</view>
+    <view class="points-hint">100积分可抵扣1元打印费，单次最高抵扣5元</view>
+  </view>
+
+  <!-- 积分说明 -->
+  <view class="card">
+    <view class="card-title">积分规则</view>
+    <view class="rule-list">
+      <view class="rule-item">
+        <view class="rule-icon">↑</view>
+        <view class="rule-info">
+          <view class="rule-title">消费获得积分</view>
+          <view class="rule-desc">每消费1元获得1积分（按实付金额计算）</view>
+        </view>
+      </view>
+      <view class="rule-item">
+        <view class="rule-icon">↓</view>
+        <view class="rule-info">
+          <view class="rule-title">积分抵扣</view>
+          <view class="rule-desc">100积分抵扣1元，单次最高抵扣5元</view>
+        </view>
+      </view>
+      <view class="rule-item">
+        <view class="rule-icon">◎</view>
+        <view class="rule-info">
+          <view class="rule-title">积分有效期</view>
+          <view class="rule-desc">积分永久有效，不清零</view>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 积分记录 -->
+  <view class="card">
+    <view class="card-title">积分明细</view>
+    
+    <view wx:if="{{records.length === 0}}" class="empty-state">
+      <view class="empty-icon">📊</view>
+      <view class="empty-text">暂无积分记录</view>
+      <view class="empty-hint">消费后可获得积分哦</view>
+    </view>
+    
+    <view wx:else class="records-list">
+      <view class="record-item" wx:for="{{records}}" wx:key="createTime">
+        <view class="record-info">
+          <view class="record-reason">{{item.reason}}</view>
+          <view class="record-time">{{item.createTime}}</view>
+        </view>
+        <view class="record-points {{item.type === 'earn' ? 'earn' : item.type === 'consume' ? 'consume' : 'refund'}}">
+          {{item.type === 'earn' ? '+' : ''}}{{item.type === 'consume' ? '-' : item.type === 'refund' ? '+' : ''}}{{item.points}}
+        </view>
+      </view>
+    </view>
+    
+    <view wx:if="{{loading}}" class="loading-more">
+      <text>加载中...</text>
+    </view>
+    
+    <view wx:if="{{!hasMore && records.length > 0}}" class="no-more">
+      <text>没有更多记录了</text>
+    </view>
+  </view>
+</view>

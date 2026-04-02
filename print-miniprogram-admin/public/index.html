@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>智能打印 · 管理后台</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/vue@3.4.21/dist/vue.global.prod.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+<div id="app">
+  <!-- 登录页 -->
+  <div v-if="!token" class="login-page">
+    <div class="login-box">
+      <div class="login-title">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>
+        智能打印管理后台
+      </div>
+      <div class="login-subtitle">管理员登录</div>
+      <form @submit.prevent="doLogin">
+        <div class="form-group">
+          <input v-model="loginForm.username" placeholder="用户名" autocomplete="username" required>
+        </div>
+        <div class="form-group">
+          <input v-model="loginForm.password" type="password" placeholder="密码" autocomplete="current-password" required>
+        </div>
+        <div v-if="loginError" class="login-error">{{ loginError }}</div>
+        <button type="submit" class="btn btn-primary btn-block" :disabled="loginLoading">
+          {{ loginLoading ? '登录中...' : '登 录' }}
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- 主界面 -->
+  <div v-else class="admin-layout">
+    <!-- 侧边栏 -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right:8px;vertical-align:middle"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>
+        智能打印
+      </div>
+      <nav class="sidebar-nav">
+        <a v-for="item in menuItems" :key="item.key"
+           :class="['nav-item', { active: currentView === item.key }]"
+           @click="switchView(item.key)">
+          <span class="nav-icon" v-html="item.icon"></span>
+          <span class="nav-text">{{ item.label }}</span>
+        </a>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="admin-info">{{ adminName }}</div>
+        <a class="nav-item" @click="doLogout"><span class="nav-icon" v-html="icons.logout"></span><span class="nav-text">退出登录</span></a>
+      </div>
+    </aside>
+
+    <!-- 主内容 -->
+    <main class="main-content">
+      <header class="top-bar">
+        <h2 class="page-title">{{ currentMenuLabel }}</h2>
+        <div class="top-bar-actions">
+          <span class="time-display">{{ currentTime }}</span>
+        </div>
+      </header>
+      <div class="content-body">
+
+        <!-- ===== 仪表盘 ===== -->
+        <div v-show="currentView === 'dashboard'" class="view">
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div class="stat-label">今日收入</div>
+              <div class="stat-value">¥{{ dash.revenue?.today?.revenue || 0 }}</div>
+              <div class="stat-sub">{{ dash.revenue?.today?.count || 0 }} 单</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">昨日收入</div>
+              <div class="stat-value">¥{{ dash.revenue?.yesterday?.revenue || 0 }}</div>
+              <div class="stat-sub">{{ dash.revenue?.yesterday?.count || 0 }} 单</div>
+            </div>
+            <div class="stat-card accent">
+              <div class="stat-label">本月收入</div>
+              <div class="stat-value">¥{{ dash.revenue?.month?.revenue || 0 }}</div>
+              <div class="stat-sub">{{ dash.revenue?.month?.count || 0 }} 单</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">累计收入</div>
+              <div class="stat-value">¥{{ dash.revenue?.all?.revenue || 0 }}</div>
+              <div class="stat-sub">{{ dash.revenue?.all?.count || 0 }} 单</div>
+            </div>
+          </div>
+
+          <div class="charts-row">
+            <div class="chart-card">
+              <div class="chart-title">近7天收入趋势</div>
+              <canvas id="revenueChart"></canvas>
+            </div>
+            <div class="chart-card">
+              <div class="chart-title">订单状态分布</div>
+              <canvas id="statusChart"></canvas>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <h3>最近订单</h3>
+            </div>
+            <table class="data-table">
+              <thead><tr><th>订单号</th><th>文件</th><th>实付</th><th>状态</th><th>时间</th></tr></thead>
+              <tbody>
+                <tr v-for="o in dash.recentOrders" :key="o.order_no">
+                  <td class="mono">{{ o.order_no }}</td>
+                  <td>{{ o.file_name }}</td>
+                  <td>¥{{ o.actual_pay }}</td>
+                  <td><span :class="'badge badge-' + o.status">{{ statusText(o.status) }}</span></td>
+                  <td>{{ formatDate(o.created_at) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- ===== 订单管理 ===== -->
+        <div v-show="currentView === 'orders'" class="view">
+          <div class="toolbar">
+            <select v-model="ordersFilter.status" @change="loadOrders()">
+              <option value="">全部状态</option>
+              <option value="pending">待支付</option>
+              <option value="paid">已支付</option>
+              <option value="printing">打印中</option>
+              <option value="completed">已完成</option>
+              <option value="cancelled">已取消</option>
+              <option value="print_failed">打印失败</option>
+            </select>
+            <select v-model="ordersFilter.orderType" @change="loadOrders()">
+              <option value="">全部类型</option>
+              <option value="print">文档打印</option>
+              <option value="idcard_copy">证件复印</option>
+              <option value="photo_print">照片打印</option>
+              <option value="factory">工厂发货</option>
+            </select>
+            <input v-model="ordersFilter.keyword" placeholder="搜索订单号/文件名" @keyup.enter="loadOrders()">
+            <input type="date" v-model="ordersFilter.dateFrom">
+            <span>至</span>
+            <input type="date" v-model="ordersFilter.dateTo">
+            <button class="btn btn-sm" @click="loadOrders()" v-html="icons.search + ' 搜索'"></button>
+            <button class="btn btn-sm btn-outline" @click="exportOrders()" v-html="icons.download + ' 导出CSV'"></button>
+            <button class="btn btn-sm btn-primary" @click="showBatchReprint()" :disabled="selectedFailedOrders.length === 0" v-html="icons.printer + ' 批量重打 (' + selectedFailedOrders.length + ')'"></button>
+          </div>
+
+          <table class="data-table">
+            <thead><tr>
+              <th style="width:36px"><input type="checkbox" @change="toggleAllFailed($event)" :checked="allFailedSelected" :disabled="failedOrderCount === 0" title="全选失败订单"></th>
+              <th>订单号</th><th>类型</th><th>用户</th><th>文件</th><th>设置</th>
+              <th>打印费</th><th>服务费</th><th>实付</th>
+              <th>状态</th><th>时间</th><th>操作</th>
+            </tr></thead>
+            <tbody>
+              <tr v-for="o in orders.list" :key="o.id">
+                <td>
+                  <input v-if="o.status === 'print_failed'" type="checkbox" :checked="selectedOrderIds.includes(o.id)" @change="toggleOrderSelect(o.id)">
+                </td>
+                <td class="mono">{{ o.order_no }}</td>
+                <td><span class="badge badge-type">{{ orderTypeText(o.order_type) }}</span></td>
+                <td>{{ o.openid?.substring(0, 10) }}...</td>
+                <td>{{ o.file_name }}</td>
+                <td>{{ o.page_count }}页×{{ o.copies }}份<br>{{ o.color_mode === 'color' ? '彩色' : '黑白' }} {{ o.paper_size }}</td>
+                <td>¥{{ o.print_fee }}</td>
+                <td>¥{{ o.service_fee }}</td>
+                <td><strong>¥{{ o.actual_pay }}</strong></td>
+                <td><span :class="'badge badge-' + o.status">{{ statusText(o.status) }}</span></td>
+                <td>{{ formatDate(o.created_at) }}</td>
+                <td>
+                  <div class="action-btns">
+                    <button v-if="o.status === 'paid'" class="btn btn-xs btn-primary" @click="assignPrinter(o)">分配打印机</button>
+                    <button v-if="o.status === 'printing'" class="btn btn-xs btn-success" @click="completeOrder(o)">完成打印</button>
+                    <select v-if="o.status === 'paid' || o.status === 'printing'" class="select-xs" @change="changeOrderStatus(o, $event.target.value)">
+                      <option value="">更改状态</option>
+                      <option value="completed">已完成</option>
+                      <option value="cancelled">已取消</option>
+                    </select>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="pagination" v-if="orders.totalPages > 1">
+            <button class="btn btn-sm" :disabled="orders.page <= 1" @click="ordersFilter.page = orders.page - 1; loadOrders()">上一页</button>
+            <span>{{ orders.page }} / {{ orders.totalPages }}</span>
+            <button class="btn btn-sm" :disabled="orders.page >= orders.totalPages" @click="ordersFilter.page = orders.page + 1; loadOrders()">下一页</button>
+          </div>
+        </div>
+
+        <!-- ===== 打印机管理 ===== -->
+        <div v-show="currentView === 'printers'" class="view">
+          <div class="toolbar">
+            <select v-model="printerFilter.entryType" @change="">
+              <option value="">全部入口</option>
+              <option v-for="et in entryTypes" :key="et.key" :value="et.key">{{ et.icon }} {{ et.label }}</option>
+            </select>
+            <select v-model="printerFilter.status">
+              <option value="">全部状态</option>
+              <option value="idle">空闲</option>
+              <option value="busy">忙碌</option>
+              <option value="offline">离线</option>
+            </select>
+            <div style="flex:1"></div>
+            <button v-if="selectedPrinterIds.length > 0" class="btn btn-sm btn-outline" @click="showBatchPrinterEdit()" style="margin-right:8px">
+              批量编辑 ({{ selectedPrinterIds.length }})
+            </button>
+            <button class="btn btn-primary btn-sm" @click="showPrinterEdit(null)" v-html="icons.plus + ' 添加打印机'"></button>
+          </div>
+          <table class="data-table">
+            <thead><tr>
+              <th style="width:36px"><input type="checkbox" :checked="allPrintersSelected" @change="toggleAllPrinters($event)"></th>
+              <th>打印机名称</th>
+              <th>客户端ID</th>
+              <th>状态</th>
+              <th>绑定入口</th>
+              <th>自定义标签</th>
+              <th>累计任务</th>
+              <th>启用</th>
+              <th>操作</th>
+            </tr></thead>
+            <tbody>
+              <tr v-for="p in filteredPrinters" :key="p.id">
+                <td><input type="checkbox" :checked="selectedPrinterIds.includes(p.id)" @change="togglePrinterSelect(p.id)"></td>
+                <td><strong>{{ p.name }}</strong></td>
+                <td class="mono" style="font-size:12px;color:#86868B">{{ p.client_id || '-' }}</td>
+                <td>
+                  <span :class="'badge badge-status-' + p.status">
+                    <svg width="8" height="8" style="margin-right:5px;vertical-align:middle"><circle cx="4" cy="4" r="4" :fill="p.status === 'idle' ? '#34C759' : p.status === 'busy' ? '#FF9500' : '#8E8E93'"/></svg>
+                    {{ p.status === 'idle' ? '空闲' : p.status === 'busy' ? '忙碌' : '离线' }}
+                    <span v-if="p.online" style="margin-left:4px;color:#34C759">●在线</span>
+                  </span>
+                </td>
+                <td>
+                  <span v-for="et in (p.entry_types || ['print'])" :key="et" class="tag tag-entry">{{ entryTypeText(et) }}</span>
+                </td>
+                <td>
+                  <span v-for="t in (p.custom_tags || [])" :key="t" class="tag tag-custom">{{ t }}</span>
+                  <span v-if="!p.custom_tags || p.custom_tags.length === 0" class="text-muted">-</span>
+                </td>
+                <td>{{ p.total_jobs || 0 }}</td>
+                <td>
+                  <label class="switch">
+                    <input type="checkbox" :checked="p.enabled !== 0" @change="togglePrinterEnabled(p)">
+                    <span class="slider"></span>
+                  </label>
+                </td>
+                <td>
+                  <div class="action-btns">
+                    <button class="btn btn-xs" @click="showPrinterEdit(p)">编辑</button>
+                    <button class="btn btn-xs btn-outline" @click="showPrinterLogs(p)" v-html="icons.eye + ' 日志'"></button>
+                    <button class="btn btn-xs btn-danger" @click="deletePrinter(p)">删除</button>
+                  </div>
+                </td>
+              </tr>
+              <tr v-if="filteredPrinters.length === 0">
+                <td colspan="9" class="text-center text-muted" style="padding:32px">暂无打印机数据</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- ===== 用户管理 ===== -->
+        <div v-show="currentView === 'users'" class="view">
+          <div class="toolbar">
+            <input v-model="usersFilter.keyword" placeholder="搜索用户名/OpenID" @keyup.enter="loadUsers()">
+            <button class="btn btn-sm" @click="loadUsers()" v-html="icons.search + ' 搜索'"></button>
+          </div>
+          <table class="data-table">
+            <thead><tr><th>ID</th><th>OpenID</th><th>昵称</th><th>积分</th><th>消费总额</th><th>订单数</th><th>注册时间</th><th>操作</th></tr></thead>
+            <tbody>
+              <tr v-for="u in users.list" :key="u.id">
+                <td>{{ u.id }}</td>
+                <td class="mono">{{ u.openid?.substring(0, 16) }}...</td>
+                <td>{{ u.nickname }}</td>
+                <td><strong>{{ u.points }}</strong></td>
+                <td>¥{{ u.total_spent }}</td>
+                <td>{{ u.order_count }}</td>
+                <td>{{ formatDate(u.created_at) }}</td>
+                <td>
+                  <button class="btn btn-xs" @click="showUserDetail(u)">详情</button>
+                  <button class="btn btn-xs btn-outline" @click="showAdjustPoints(u)">调整积分</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="pagination" v-if="users.totalPages > 1">
+            <button class="btn btn-sm" :disabled="users.page <= 1" @click="usersFilter.page = users.page - 1; loadUsers()">上一页</button>
+            <span>{{ users.page }} / {{ users.totalPages }}</span>
+            <button class="btn btn-sm" :disabled="users.page >= users.totalPages" @click="usersFilter.page = users.page + 1; loadUsers()">下一页</button>
+          </div>
+        </div>
+
+        <!-- ===== 价格设置 ===== -->
+        <div v-show="currentView === 'pricing'" class="view">
+          <div class="card settings-card">
+            <h3>打印价格设置</h3>
+            <div class="form-row">
+              <label>黑白打印价格（元/页）</label>
+              <input type="number" step="0.01" v-model="config.price_bw">
+            </div>
+            <div class="form-row">
+              <label>彩色打印价格（元/页）</label>
+              <input type="number" step="0.01" v-model="config.price_color">
+            </div>
+            <div class="form-row">
+              <label>每单服务费（元）</label>
+              <input type="number" step="0.01" v-model="config.service_fee">
+              <span class="form-hint">每笔订单额外收取的固定费用</span>
+            </div>
+          </div>
+          <div class="card settings-card">
+            <h3>积分规则</h3>
+            <div class="form-row">
+              <label>启用积分系统</label>
+              <select v-model="config.enable_points">
+                <option value="1">开启</option>
+                <option value="0">关闭</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <label>积分获取比例（消费X元=1积分）</label>
+              <input type="number" v-model="config.points_earn_rate">
+            </div>
+            <div class="form-row">
+              <label>积分抵扣比例（X积分抵扣1元）</label>
+              <input type="number" v-model="config.points_deduct_rate">
+            </div>
+            <div class="form-row">
+              <label>单次最高抵扣金额（元）</label>
+              <input type="number" v-model="config.max_points_discount">
+            </div>
+          </div>
+          <button class="btn btn-primary" @click="saveConfig()" v-html="icons.save + ' 保存价格设置'"></button>
+
+          <!-- 证件复印价格 -->
+          <div class="card settings-card" style="margin-top:24px">
+            <h3>证件复印价格</h3>
+            <div class="form-row">
+              <label>启用证件复印</label>
+              <select v-model="config.enable_idcard">
+                <option value="1">开启</option>
+                <option value="0">关闭</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <label>黑白复印单价（元/张）</label>
+              <input type="number" step="0.1" v-model="config.idcard_bw_price">
+            </div>
+            <div class="form-row">
+              <label>彩色复印单价（元/张）</label>
+              <input type="number" step="0.1" v-model="config.idcard_color_price">
+            </div>
+          </div>
+
+          <!-- 照片打印价格 -->
+          <div class="card settings-card" style="margin-top:24px">
+            <h3>照片打印价格</h3>
+            <div class="form-row">
+              <label>启用照片打印</label>
+              <select v-model="config.enable_photo">
+                <option value="1">开启</option>
+                <option value="0">关闭</option>
+              </select>
+            </div>
+            <div class="form-row"><label>证件照直接打印 1寸</label><input type="number" step="0.1" v-model="config.photo_direct_1_price"></div>
+            <div class="form-row"><label>证件照直接打印 2寸</label><input type="number" step="0.1" v-model="config.photo_direct_2_price"></div>
+            <div class="form-row"><label>换底色/拍照 1寸</label><input type="number" step="0.1" v-model="config.photo_bg_1_price"></div>
+            <div class="form-row"><label>换底色/拍照 2寸</label><input type="number" step="0.1" v-model="config.photo_bg_2_price"></div>
+            <div class="form-row"><label>换正装 1寸</label><input type="number" step="0.1" v-model="config.photo_suit_1_price"></div>
+            <div class="form-row"><label>换正装 2寸</label><input type="number" step="0.1" v-model="config.photo_suit_2_price"></div>
+            <div class="form-row"><label>5寸生活照</label><input type="number" step="0.1" v-model="config.photo_life_5_price"></div>
+            <div class="form-row"><label>6寸生活照</label><input type="number" step="0.1" v-model="config.photo_life_6_price"></div>
+          </div>
+
+          <!-- 工厂发货 -->
+          <div class="card settings-card" style="margin-top:24px">
+            <h3>工厂发货设置</h3>
+            <div class="form-row">
+              <label>启用工厂发货</label>
+              <select v-model="config.enable_factory">
+                <option value="1">开启</option>
+                <option value="0">关闭</option>
+              </select>
+            </div>
+            <div class="form-row"><label>打印单价（元/页）</label><input type="number" step="0.01" v-model="config.factory_price"></div>
+            <div class="form-row"><label>截单时间</label><input v-model="config.factory_deadline" placeholder="如 17:00"></div>
+            <div class="form-row"><label>发货说明</label><input v-model="config.factory_delivery_note"></div>
+          </div>
+        </div>
+
+        <!-- ===== 系统设置 ===== -->
+        <div v-show="currentView === 'settings'" class="view">
+          <div class="card settings-card">
+            <h3>店铺信息</h3>
+            <div class="form-row">
+              <label>店铺名称</label>
+              <input v-model="config.shop_name">
+            </div>
+            <div class="form-row">
+              <label>店铺地址</label>
+              <input v-model="config.shop_address">
+            </div>
+            <div class="form-row">
+              <label>联系电话</label>
+              <input v-model="config.shop_phone">
+            </div>
+          </div>
+          <div class="card settings-card">
+            <h3>系统开关</h3>
+            <div class="form-row">
+              <label>支付功能</label>
+              <select v-model="config.enable_payment">
+                <option value="1">开启</option>
+                <option value="0">关闭</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <label>打印功能</label>
+              <select v-model="config.enable_print">
+                <option value="1">开启</option>
+                <option value="0">关闭</option>
+              </select>
+            </div>
+          </div>
+          <div class="card settings-card">
+            <h3>修改密码</h3>
+            <div class="form-row">
+              <label>原密码</label>
+              <input type="password" v-model="passwordForm.old">
+            </div>
+            <div class="form-row">
+              <label>新密码</label>
+              <input type="password" v-model="passwordForm.new">
+            </div>
+            <div class="form-row">
+              <label>确认新密码</label>
+              <input type="password" v-model="passwordForm.confirm">
+            </div>
+            <button class="btn btn-primary" @click="changePassword()" v-html="icons.key + ' 修改密码'"></button>
+          </div>
+          <button class="btn btn-primary" @click="saveConfig()" v-html="icons.save + ' 保存系统设置'"></button>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- ===== 弹窗：分配打印机 ===== -->
+  <div v-if="modal.show" class="modal-overlay" @click.self="modal.show = false">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>{{ modal.title }}</h3>
+        <button class="modal-close" @click="modal.show = false">✕</button>
+      </div>
+      <div class="modal-body">
+        <!-- 分配打印机 -->
+        <div v-if="modal.type === 'assignPrinter'">
+          <p>订单: <strong>{{ modal.data.order_no }}</strong></p>
+          <div class="form-row">
+            <label>选择打印机</label>
+            <select v-model="modal.data.selectedPrinter">
+              <option value="">请选择</option>
+              <option v-for="p in idlePrinters" :key="p.id" :value="p.id">{{ p.name }} ({{ p.port }})</option>
+            </select>
+          </div>
+          <div v-if="idlePrinters.length === 0" class="text-muted">当前没有空闲打印机</div>
+        </div>
+        <!-- 添加/编辑打印机 -->
+        <div v-if="modal.type === 'printerEdit'">
+          <div class="form-row">
+            <label>打印机名称（系统名称，不可修改）</label>
+            <input v-model="modal.data.name" readonly style="background:#f5f5f7;color:#86868B" placeholder="">
+          </div>
+          <div class="form-row">
+            <label>端口</label>
+            <input v-model="modal.data.port" placeholder="如：USB001">
+          </div>
+          <div class="form-row">
+            <label>说明</label>
+            <input v-model="modal.data.description" placeholder="如：前台打印机">
+          </div>
+          <div class="form-row">
+            <label>绑定小程序入口（多选）</label>
+            <div class="checkbox-group">
+              <label v-for="et in entryTypes" :key="et.key" class="checkbox-item" :class="{ checked: modal.data.entry_types.includes(et.key) }" @click="toggleEntryType(et.key)">
+                <span class="checkbox-icon">{{ et.icon }}</span>
+                <span>{{ et.label }}</span>
+              </label>
+            </div>
+          </div>
+          <div class="form-row">
+            <label>启用状态</label>
+            <label class="switch">
+              <input type="checkbox" v-model="modal.data.enabled">
+              <span class="slider"></span>
+            </label>
+            <span class="form-hint">{{ modal.data.enabled ? '启用（接收订单）' : '禁用（不接收订单）' }}</span>
+          </div>
+        </div>
+        <!-- 批量编辑打印机 -->
+        <div v-if="modal.type === 'batchPrinterEdit'">
+          <div class="form-row">
+            <label>已选中 {{ modal.data.count }} 台打印机</label>
+          </div>
+          <div class="form-row">
+            <label>绑定小程序入口（多选）</label>
+            <div class="checkbox-group">
+              <label v-for="et in entryTypes" :key="et.key" class="checkbox-item" :class="{ checked: modal.data.entry_types.includes(et.key) }" @click="toggleBatchEntryType(et.key)">
+                <span class="checkbox-icon">{{ et.icon }}</span>
+                <span>{{ et.label }}</span>
+              </label>
+            </div>
+            <span class="form-hint">不修改的项请取消所有勾选</span>
+          </div>
+          <div class="form-row">
+            <label>启用状态</label>
+            <select v-model="modal.data.enabled">
+              <option value="">不修改</option>
+              <option value="1">启用</option>
+              <option value="0">禁用</option>
+            </select>
+          </div>
+        </div>
+        <!-- 打印机日志 -->
+        <div v-if="modal.type === 'printerLogs'">
+          <table class="data-table mini" v-if="modal.data.logs && modal.data.logs.length > 0">
+            <thead><tr><th>时间</th><th>订单号</th><th>动作</th><th>状态</th><th>错误</th></tr></thead>
+            <tbody>
+              <tr v-for="log in modal.data.logs" :key="log.id">
+                <td>{{ formatLogTime(log.created_at) }}</td>
+                <td class="mono">{{ log.order_no || '-' }}</td>
+                <td>{{ log.action }}</td>
+                <td><span :class="'badge badge-' + log.status">{{ log.status }}</span></td>
+                <td style="color:#FF3B30">{{ log.error_msg || '-' }}</td>
+              </tr>
+            </tbody>
+          </table>
+          <div v-else class="text-center text-muted" style="padding:32px">暂无日志记录</div>
+        </div>
+        <!-- 用户详情 -->
+        <div v-if="modal.type === 'userDetail'">
+          <div class="detail-grid">
+            <div><strong>昵称：</strong>{{ modal.data.nickname }}</div>
+            <div><strong>OpenID：</strong><span class="mono">{{ modal.data.openid }}</span></div>
+            <div><strong>积分：</strong>{{ modal.data.points }}</div>
+            <div><strong>消费总额：</strong>¥{{ modal.data.total_spent }}</div>
+            <div><strong>订单数：</strong>{{ modal.data.order_count }}</div>
+            <div><strong>注册时间：</strong>{{ modal.data.created_at }}</div>
+          </div>
+          <h4 v-if="modal.data.orders?.length" style="margin-top:16px">最近订单</h4>
+          <table v-if="modal.data.orders?.length" class="data-table mini">
+            <thead><tr><th>订单号</th><th>文件</th><th>金额</th><th>状态</th></tr></thead>
+            <tbody>
+              <tr v-for="o in modal.data.orders" :key="o.id">
+                <td class="mono">{{ o.order_no }}</td>
+                <td>{{ o.file_name }}</td>
+                <td>¥{{ o.actual_pay }}</td>
+                <td><span :class="'badge badge-' + o.status">{{ statusText(o.status) }}</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <!-- 调整积分 -->
+        <div v-if="modal.type === 'adjustPoints'">
+          <p>用户: <strong>{{ modal.data.nickname }}</strong>（当前积分: {{ modal.data.points }}）</p>
+          <div class="form-row">
+            <label>调整积分数</label>
+            <input type="number" v-model="modal.data.adjustAmount" placeholder="正数增加，负数扣除">
+          </div>
+          <div class="form-row">
+            <label>原因</label>
+            <input v-model="modal.data.adjustReason" placeholder="如：活动奖励">
+          </div>
+        </div>
+        <!-- 批量重打 -->
+        <div v-if="modal.type === 'batchReprint'">
+          <p style="margin-bottom:12px">已选中 <strong style="color:var(--red)">{{ modal.data.orderCount }}</strong> 个失败订单，将重新打印。</p>
+          <div class="form-row">
+            <label>选择打印机（目标打印机）</label>
+            <div class="printer-list">
+              <div v-for="p in modal.data.availablePrinters" :key="p.id"
+                   :class="['printer-option', { selected: modal.data.selectedPrinter === p.id }]"
+                   @click="modal.data.selectedPrinter = p.id">
+                <div class="printer-option-name">{{ p.name }}</div>
+                <div class="printer-option-info">
+                  <span :class="'dot dot-' + p.status"></span>
+                  {{ p.status === 'idle' ? '空闲' : p.status === 'busy' ? '忙碌' : '离线' }}
+                  <span v-if="p.client_id" class="text-muted"> · {{ p.client_id.substring(0, 30) }}</span>
+                </div>
+              </div>
+              <div v-if="!modal.data.availablePrinters || modal.data.availablePrinters.length === 0" class="text-muted" style="padding:20px;text-align:center">
+                暂无可用打印机，请先在「打印机管理」中添加
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" @click="modal.show = false">取消</button>
+        <button v-if="modal.type === 'printerEdit'" class="btn btn-primary" @click="savePrinter()">保存</button>
+        <button v-if="modal.type === 'batchPrinterEdit'" class="btn btn-primary" @click="saveBatchPrinterEdit()">批量保存</button>
+        <button v-else-if="modal.type === 'printerLogs'" class="btn" @click="modal.show = false">关闭</button>
+        <button v-else class="btn btn-primary" @click="modalConfirm()">确定</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div v-if="toast.show" :class="['toast', 'toast-' + toast.type]">{{ toast.msg }}</div>
+</div>
+
+<script src="/js/app.js"></script>
+</body>
+</html>

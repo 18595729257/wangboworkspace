@@ -1,0 +1,77 @@
+<!--pages/order-history/order-history.wxml-->
+<wxs src="/utils/format.wxs" module="fmt" />
+<view class="container">
+  <!-- 状态筛选 -->
+  <view class="status-filter">
+    <scroll-view scroll-x class="filter-scroll">
+      <view class="filter-list">
+        <view class="filter-item {{status === '' ? 'active' : ''}}" data-status="" bindtap="switchStatus">
+          <text>全部</text>
+        </view>
+        <view class="filter-item {{status === 'pending' ? 'active' : ''}}" data-status="pending" bindtap="switchStatus">
+          <text>待支付</text>
+        </view>
+        <view class="filter-item {{status === 'paid' ? 'active' : ''}}" data-status="paid" bindtap="switchStatus">
+          <text>已支付</text>
+        </view>
+        <view class="filter-item {{status === 'printing' ? 'active' : ''}}" data-status="printing" bindtap="switchStatus">
+          <text>打印中</text>
+        </view>
+        <view class="filter-item {{status === 'completed' ? 'active' : ''}}" data-status="completed" bindtap="switchStatus">
+          <text>已完成</text>
+        </view>
+      </view>
+    </scroll-view>
+  </view>
+
+  <!-- 订单列表 -->
+  <view wx:if="{{orders.length > 0}}" class="order-list">
+    <view class="order-item" wx:for="{{orders}}" wx:key="orderNo" bindtap="viewOrder" data-orderno="{{item.orderNo}}">
+      <view class="order-header">
+        <view class="order-no">{{item.orderNo}}</view>
+        <view class="order-status {{getStatusClass(item.status)}}">
+          <text>{{getStatusText(item.status)}}</text>
+        </view>
+      </view>
+      
+      <view class="order-body">
+        <view class="file-info">
+          <view class="file-icon">📎</view>
+          <view class="file-detail">
+            <view class="file-name">{{item.fileName}}</view>
+            <view class="file-setting">{{item.pageCount}}页 × {{item.copies}}份 × {{item.colorMode === 'color' ? '彩色' : '黑白'}}</view>
+          </view>
+        </view>
+        <view class="order-price">
+          <view class="price-value">¥{{fmt.formatPrice(item.actualPay)}}</view>
+          <view class="price-time">{{fmt.formatTime(item.createTime)}}</view>
+        </view>
+      </view>
+      
+      <view class="order-footer">
+        <view class="order-time">创建时间：{{fmt.formatTime(item.createTime)}}</view>
+        <view class="order-actions">
+          <button wx:if="{{item.status === 'pending'}}" class="action-btn pay" catchtap="payOrder" data-orderno="{{item.orderNo}}">去支付</button>
+          <button wx:if="{{item.status === 'pending'}}" class="action-btn cancel" catchtap="cancelOrder" data-orderno="{{item.orderNo}}">取消</button>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 空状态 -->
+  <view wx:if="{{orders.length === 0 && !loading}}" class="empty-state">
+    <view class="empty-icon">○</view>
+    <view class="empty-text">暂无订单</view>
+    <view class="empty-hint">快去打印第一份文件吧</view>
+  </view>
+
+  <!-- 加载中 -->
+  <view wx:if="{{loading}}" class="loading">
+    <text>加载中...</text>
+  </view>
+
+  <!-- 没有更多 -->
+  <view wx:if="{{!hasMore && orders.length > 0}}" class="no-more">
+    <text>没有更多订单了</text>
+  </view>
+</view>

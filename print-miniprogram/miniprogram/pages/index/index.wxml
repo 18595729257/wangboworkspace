@@ -1,0 +1,111 @@
+<!--pages/index/index.wxml-->
+<view class="page-wrap">
+  <!-- 店铺定位栏 -->
+  <view class="location-bar">
+    <view class="location-left">
+      <view class="location-icon">◎</view>
+      <view class="location-text">
+        <view class="location-name">智能打印店</view>
+        <view class="location-addr">中北大学校内 · 点击切换</view>
+      </view>
+    </view>
+    <view class="location-right">
+      <view class="notify-dot" wx:if="{{hasNotify}}"></view>
+      <view class="header-icon" bindtap="goToMy">≡</view>
+    </view>
+  </view>
+
+  <!-- 公告栏 -->
+  <view class="notice-bar" wx:if="{{noticeText}}">
+    <text class="notice-icon">♪</text>
+    <text class="notice-text">{{noticeText}}</text>
+  </view>
+
+  <!-- 用户栏 -->
+  <view class="user-bar">
+    <view class="flex" wx:if="{{isLogin}}">
+      <image class="user-bar-avatar" src="{{userInfo.avatarUrl || '/images/default-avatar.png'}}" mode="aspectFill"></image>
+      <view>
+        <view class="user-bar-name">{{userInfo.nickName || '微信用户'}}</view>
+        <view class="user-bar-points">{{points}}积分</view>
+      </view>
+    </view>
+    <view class="flex" wx:else bindtap="onLogin">
+      <view class="user-bar-avatar-placeholder">◎</view>
+      <view>
+        <view class="user-bar-name">微信一键登录</view>
+        <view class="user-bar-points">登录享受积分抵扣</view>
+      </view>
+    </view>
+  </view>
+
+  <view class="container">
+    <!-- 功能卡片区 -->
+    <view class="section-title">全部服务</view>
+    <view class="service-grid">
+
+      <!-- 文档&图片打印 -->
+      <view class="service-card card-blue" bindtap="goToUpload">
+        <view class="service-hot" wx:if="{{false}}">🔥</view>
+        <view class="service-icon-wrap">
+          <view class="service-icon">▤</view>
+        </view>
+        <view class="service-info">
+          <view class="service-name">文档&图片打印</view>
+          <view class="service-desc">PDF Word Excel PPT 图片</view>
+        </view>
+        <view class="service-arrow">›</view>
+      </view>
+
+      <!-- 证件复印 -->
+      <view class="service-card card-orange" bindtap="goToIdCardCopy">
+        <view class="service-icon-wrap">
+          <view class="service-icon">⊞</view>
+        </view>
+        <view class="service-info">
+          <view class="service-name">证件复印</view>
+          <view class="service-desc">身份证 学生证 驾驶证 户口本…</view>
+        </view>
+        <view class="service-arrow">›</view>
+      </view>
+
+      <!-- 照片打印 -->
+      <view class="service-card card-purple" bindtap="goToPhotoPrint">
+        <view class="service-icon-wrap">
+          <view class="service-icon">◈</view>
+        </view>
+        <view class="service-info">
+          <view class="service-name">照片打印</view>
+          <view class="service-desc">1寸 2寸… 证件照 生活照</view>
+        </view>
+        <view class="service-arrow">›</view>
+      </view>
+
+      <!-- 工厂发货 -->
+      <view class="service-card card-yellow" bindtap="goToFactoryPrint">
+        <view class="service-hot">🔥</view>
+        <view class="service-icon-wrap">
+          <view class="service-icon">▦</view>
+        </view>
+        <view class="service-info">
+          <view class="service-name">5分一页 工厂发货</view>
+          <view class="service-desc">每天17:00前订单当天发走 | 全国多地次日达</view>
+        </view>
+        <view class="service-arrow">›</view>
+      </view>
+
+    </view>
+
+    <!-- 快捷入口 -->
+    <view class="shortcuts">
+      <view class="shortcut-item" bindtap="goToOrders">
+        <view class="shortcut-icon">≡</view>
+        <view class="shortcut-text">我的订单</view>
+      </view>
+      <view class="shortcut-item" bindtap="goToMy">
+        <view class="shortcut-icon">⭐</view>
+        <view class="shortcut-text">我的积分</view>
+      </view>
+    </view>
+  </view>
+</view>

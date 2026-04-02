@@ -1,0 +1,34 @@
+<!--pages/login/login.wxml-->
+<view class="page">
+  <view class="header">
+    <image class="logo" src="{{avatar || '/images/default-avatar.png'}}" mode="aspectFill"></image>
+    <view class="title">{{isUpdate ? '编辑资料' : '设置资料'}}</view>
+    <view class="sub">设置你的头像和昵称</view>
+  </view>
+
+  <view class="auth-list">
+    <view class="auth-item">
+      <view class="auth-info">
+        <text class="auth-label">头像</text>
+        <text class="auth-status {{avatar ? 'done' : ''}}">{{avatar ? '已设置' : '未设置'}}</text>
+      </view>
+      <button class="auth-btn" open-type="chooseAvatar" bindchooseavatar="onAvatar">
+        <image wx:if="{{avatar}}" class="auth-avatar" src="{{avatar}}" mode="aspectFill"></image>
+        <text wx:else>选择头像</text>
+      </button>
+    </view>
+
+    <view class="auth-item">
+      <view class="auth-info">
+        <text class="auth-label">昵称</text>
+      </view>
+      <input class="auth-input" type="nickname" placeholder="点击输入昵称" value="{{nickname}}" bindinput="onNick" />
+    </view>
+  </view>
+
+  <button class="main-btn" bindtap="saveProfile">
+    <text>保存</text>
+  </button>
+
+  <view class="skip" bindtap="goBack">返回</view>
+</view>

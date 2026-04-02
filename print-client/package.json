@@ -1,0 +1,13 @@
+{
+  "name": "print-client",
+  "version": "2.0.0",
+  "description": "智能打印客户端 - WebSocket实时推送",
+  "main": "client.js",
+  "scripts": {
+    "start": "node client.js",
+    "dev": "node client.js --verbose"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

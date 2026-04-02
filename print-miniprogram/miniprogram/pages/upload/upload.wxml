@@ -1,0 +1,159 @@
+<!--pages/upload/upload.wxml-->
+<view class="container">
+  <!-- 文件选择 -->
+  <view class="card">
+    <view class="card-title">选择文件</view>
+    
+    <view wx:if="{{!selectedFile}}" class="file-picker" bindtap="chooseFile">
+      <view class="picker-icon">＋</view>
+      <view class="picker-text">点击选择要打印的文件</view>
+      <view class="picker-hint">支持 PDF、Word、Excel、PPT、图片</view>
+    </view>
+    
+    <view wx:else class="file-selected">
+      <view class="file-info">
+        <view class="file-icon">📎</view>
+        <view class="file-detail">
+          <view class="file-name">{{selectedFile.name}}</view>
+          <view class="file-size">{{selectedFile.sizeText}}</view>
+        </view>
+      </view>
+      <view class="file-remove" bindtap="removeFile">✕</view>
+    </view>
+  </view>
+
+  <!-- 打印设置 -->
+  <view class="card">
+    <view class="card-title">打印设置</view>
+    
+    <view class="setting-item">
+      <view class="setting-label">打印页数</view>
+      <view class="setting-value">
+        <input type="number" value="{{pageCount}}" bindinput="setPageCount" placeholder="页数" />
+        <text class="setting-unit">页</text>
+      </view>
+    </view>
+    
+    <view class="setting-item">
+      <view class="setting-label">打印份数</view>
+      <view class="setting-value">
+        <input type="number" value="{{copies}}" bindinput="setCopies" placeholder="份数" />
+        <text class="setting-unit">份</text>
+      </view>
+    </view>
+    
+    <view class="setting-item">
+      <view class="setting-label">颜色模式</view>
+      <view class="setting-options">
+        <view class="option {{colorMode === 'bw' ? 'active' : ''}}" data-mode="bw" bindtap="setColorMode">
+          <text>黑白</text>
+        </view>
+        <view class="option {{colorMode === 'color' ? 'active' : ''}}" data-mode="color" bindtap="setColorMode">
+          <text>彩色</text>
+        </view>
+      </view>
+    </view>
+    
+    <view class="setting-item">
+      <view class="setting-label">纸张大小</view>
+      <view class="setting-options">
+        <view class="option {{paperSize === 'A4' ? 'active' : ''}}" data-size="A4" bindtap="setPaperSize">
+          <text>A4</text>
+        </view>
+        <view class="option {{paperSize === 'A3' ? 'active' : ''}}" data-size="A3" bindtap="setPaperSize">
+          <text>A3</text>
+        </view>
+        <view class="option {{paperSize === 'B5' ? 'active' : ''}}" data-size="B5" bindtap="setPaperSize">
+          <text>B5</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 积分抵扣（登录用户可见） -->
+  <view wx:if="{{isLogin}}" class="card">
+    <view class="card-title">积分抵扣</view>
+    
+    <view class="points-row">
+      <view class="flex">
+        <text class="points-label">使用积分抵扣</text>
+        <text class="points-balance">（可用{{userPoints}}积分）</text>
+      </view>
+      <switch checked="{{usePoints}}" bindchange="togglePoints" color="#4A90D9" />
+    </view>
+    
+    <view wx:if="{{usePoints}}" class="points-input">
+      <view class="setting-label">使用积分数</view>
+      <view class="setting-value">
+        <input type="number" value="{{pointsToUse}}" bindinput="setPointsToUse" placeholder="积分数" />
+        <text class="setting-unit">积分</text>
+      </view>
+      <view class="points-hint">100积分抵扣1元，本次最多抵扣{{maxPointsDiscount}}元</view>
+    </view>
+  </view>
+
+  <!-- 价格明细 -->
+  <view class="card price-card">
+    <view class="card-title">价格明细</view>
+    
+    <view class="price-row">
+      <text class="price-label">打印费用</text>
+      <text class="price-value">¥{{printFee}}</text>
+    </view>
+    
+    <view class="price-row">
+      <text class="price-label">服务费</text>
+      <text class="price-value">¥{{serviceFee}}</text>
+    </view>
+    
+    <view wx:if="{{usePoints && pointsDiscount > 0}}" class="price-row discount">
+      <text class="price-label">积分抵扣</text>
+      <text class="price-value">-¥{{pointsDiscount}}</text>
+    </view>
+    
+    <view class="divider"></view>
+    
+    <view class="price-row total">
+      <text class="price-label">实付金额</text>
+      <text class="price-value price-large">¥{{actualPay}}</text>
+    </view>
+  </view>
+
+  <!-- 提交按钮 -->
+  <view class="submit-area">
+    <button class="btn-primary submit-btn" disabled="{{!selectedFile || loading}}" bindtap="createOrderAndPay">
+      <text wx:if="{{loading}}">创建中...</text>
+      <text wx:else>立即支付 ¥{{actualPay}}</text>
+    </button>
+    <view class="submit-hint">支付后自动进入打印队列</view>
+  </view>
+
+  <!-- 文件来源弹窗 -->
+  <view wx:if="{{showFilePicker}}" class="action-mask" bindtap="hideFilePicker">
+    <view class="action-sheet" catchtap="">
+      <view class="action-title">选择文件来源</view>
+      <view class="action-item" bindtap="chooseLocalFile">
+        <view class="action-icon-wrap"><text class="action-icon">▤</text></view>
+        <view class="action-info">
+          <text class="action-name">选择本地文件</text>
+          <text class="action-desc">手机存储中的文档</text>
+        </view>
+      </view>
+      <view class="action-item" bindtap="chooseChatFile">
+        <view class="action-icon-wrap"><text class="action-icon">◇</text></view>
+        <view class="action-info">
+          <text class="action-name">选择微信聊天文件</text>
+          <text class="action-desc">从聊天记录中选择</text>
+        </view>
+      </view>
+      <view class="action-item" bindtap="chooseAlbumImage">
+        <view class="action-icon-wrap"><text class="action-icon">◈</text></view>
+        <view class="action-info">
+          <text class="action-name">选择手机相册</text>
+          <text class="action-desc">拍照或从相册选择图片</text>
+        </view>
+      </view>
+      <view class="action-cancel" bindtap="hideFilePicker">取消</view>
+    </view>
+  </view>
+</view>

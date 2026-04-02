@@ -1,0 +1,97 @@
+<!--pages/payment/payment.wxml-->
+<wxs src="/utils/format.wxs" module="fmt" />
+<view class="container">
+  <!-- 订单信息 -->
+  <view wx:if="{{orderInfo}}" class="card">
+    <view class="card-title">订单信息</view>
+    
+    <view class="order-info">
+      <view class="info-row">
+        <text class="info-label">订单号</text>
+        <text class="info-value">{{orderInfo.orderNo}}</text>
+      </view>
+      
+      <view class="info-row">
+        <text class="info-label">文件名</text>
+        <text class="info-value">{{orderInfo.fileName}}</text>
+      </view>
+      
+      <view class="info-row">
+        <text class="info-label">打印设置</text>
+        <text class="info-value">{{orderInfo.pageCount}}页 × {{orderInfo.copies}}份 × {{orderInfo.colorMode === 'color' ? '彩色' : '黑白'}}</text>
+      </view>
+      
+      <view class="info-row">
+        <text class="info-label">订单状态</text>
+        <view class="status-tag tag-{{orderInfo.status}}">
+          <text>{{orderInfo.status === 'pending' ? '待支付' : orderInfo.status === 'paid' ? '已支付' : orderInfo.status === 'printing' ? '打印中' : orderInfo.status === 'completed' ? '已完成' : '已取消'}}</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 价格明细 -->
+  <view wx:if="{{orderInfo}}" class="card price-card">
+    <view class="card-title">价格明细</view>
+    
+    <view class="price-row">
+      <text class="price-label">打印费用</text>
+      <text class="price-value">¥{{fmt.formatPrice(orderInfo.printFee)}}</text>
+    </view>
+    
+    <view class="price-row">
+      <text class="price-label">服务费</text>
+      <text class="price-value">¥{{fmt.formatPrice(orderInfo.serviceFee)}}</text>
+    </view>
+    
+    <view wx:if="{{orderInfo.pointsDiscount > 0}}" class="price-row discount">
+      <text class="price-label">积分抵扣</text>
+      <text class="price-value">-¥{{fmt.formatPrice(orderInfo.pointsDiscount)}}</text>
+    </view>
+    
+    <view class="divider"></view>
+    
+    <view class="price-row total">
+      <text class="price-label">实付金额</text>
+      <text class="price-value price-large">¥{{fmt.formatPrice(orderInfo.actualPay)}}</text>
+    </view>
+  </view>
+
+  <!-- 支付按钮 -->
+  <view wx:if="{{orderInfo && orderInfo.status === 'pending'}}" class="pay-section">
+    <button class="btn-primary pay-btn" disabled="{{loading}}" bindtap="startPay">
+      <text wx:if="{{loading}}">支付中...</text>
+      <text wx:else>微信支付 ¥{{fmt.formatPrice(orderInfo.actualPay)}}</text>
+    </button>
+    <view class="pay-hint">支付后自动进入打印队列</view>
+  </view>
+
+  <!-- 打印中状态 -->
+  <view wx:if="{{orderInfo && orderInfo.status === 'printing'}}" class="status-section">
+    <view class="status-icon">⋯</view>
+    <view class="status-text">正在打印中...</view>
+    <view class="status-hint">请在打印机处等待取件</view>
+    <button class="btn-secondary" bindtap="viewQueue">查看打印队列</button>
+  </view>
+
+  <!-- 已完成状态 -->
+  <view wx:if="{{orderInfo && orderInfo.status === 'completed'}}" class="status-section">
+    <view class="status-icon completed">✓</view>
+    <view class="status-text">打印完成！</view>
+    <view class="status-hint">请在打印机处取件</view>
+    <button class="btn-primary" bindtap="goHome">返回首页</button>
+  </view>
+
+  <!-- 已支付状态 -->
+  <view wx:if="{{orderInfo && orderInfo.status === 'paid'}}" class="status-section">
+    <view class="status-icon paid">…</view>
+    <view class="status-text">已支付，等待打印</view>
+    <view class="status-hint">您的订单已加入打印队列</view>
+    <button class="btn-secondary" bindtap="viewQueue">查看打印队列</button>
+  </view>
+</view>
+
+<!-- 加载中 -->
+<view wx:if="{{!orderInfo}}" class="loading">
+  <view class="loading-text">加载中...</view>
+</view>

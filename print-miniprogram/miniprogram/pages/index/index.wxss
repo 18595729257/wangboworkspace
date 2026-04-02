@@ -1,0 +1,379 @@
+/* pages/index/index.wxss */
+
+/* 页面包裹 */
+.page-wrap {
+  min-height: 100vh;
+  background: var(--bg);
+}
+
+/* 定位栏 */
+.location-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20rpx 30rpx;
+  background: var(--card);
+  padding-top: calc(env(safe-area-inset-top, 20px) + 16rpx);
+}
+
+.location-left {
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+}
+
+.location-icon {
+  font-size: 32rpx;
+  color: var(--blue);
+}
+
+.location-name {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: var(--label);
+}
+
+.location-addr {
+  font-size: 22rpx;
+  color: var(--label-secondary);
+  margin-top: 2rpx;
+}
+
+.location-right {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+  position: relative;
+}
+
+.header-icon {
+  font-size: 36rpx;
+  color: var(--label);
+  font-weight: 300;
+}
+
+.notify-dot {
+  width: 14rpx;
+  height: 14rpx;
+  border-radius: 50%;
+  background: var(--red);
+  position: absolute;
+  right: 40rpx;
+  top: -2rpx;
+}
+
+/* 公告栏 */
+.notice-bar {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  padding: 14rpx 30rpx;
+  background: rgba(255, 149, 0, 0.06);
+}
+
+.notice-icon {
+  font-size: 24rpx;
+  color: var(--orange);
+}
+
+.notice-text {
+  font-size: 24rpx;
+  color: var(--label-secondary);
+}
+
+/* 用户栏 */
+.user-bar {
+  background: var(--card);
+  padding: 20rpx 30rpx;
+  margin-bottom: 8rpx;
+}
+
+.user-bar-avatar {
+  width: 72rpx;
+  height: 72rpx;
+  border-radius: 50%;
+  margin-right: 18rpx;
+}
+
+.user-bar-avatar-placeholder {
+  width: 72rpx;
+  height: 72rpx;
+  border-radius: 50%;
+  margin-right: 18rpx;
+  background: rgba(0, 122, 255, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--blue);
+  font-size: 32rpx;
+}
+
+.user-bar-name {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: var(--label);
+}
+
+.user-bar-points {
+  font-size: 22rpx;
+  color: var(--label-secondary);
+  margin-top: 2rpx;
+}
+
+/* 区域标题 */
+.section-title {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: var(--label);
+  margin: 24rpx 0 16rpx;
+  letter-spacing: -0.3rpx;
+}
+
+/* 服务卡片网格 */
+.service-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 18rpx;
+}
+
+.service-card {
+  display: flex;
+  align-items: center;
+  border-radius: var(--radius);
+  padding: 32rpx 28rpx;
+  color: #ffffff;
+  position: relative;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.service-card:active {
+  opacity: 0.9;
+  transform: scale(0.98);
+}
+
+.card-blue { background: linear-gradient(160deg, #007AFF 0%, #0055D4 100%); }
+.card-orange { background: linear-gradient(160deg, #FF9500 0%, #E08600 100%); }
+.card-purple { background: linear-gradient(160deg, #AF52DE 0%, #8944AB 100%); }
+.card-yellow { background: linear-gradient(160deg, #FFD60A 0%, #F0C800 100%); color: #333; }
+
+.service-hot {
+  position: absolute;
+  top: 10rpx;
+  right: 16rpx;
+  font-size: 28rpx;
+}
+
+.service-icon-wrap {
+  width: 72rpx;
+  height: 72rpx;
+  border-radius: 18rpx;
+  background: rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 22rpx;
+  flex-shrink: 0;
+}
+
+.service-icon {
+  font-size: 36rpx;
+}
+
+.service-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.service-name {
+  font-size: 32rpx;
+  font-weight: 700;
+  letter-spacing: -0.3rpx;
+  margin-bottom: 6rpx;
+}
+
+.service-desc {
+  font-size: 22rpx;
+  opacity: 0.75;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.service-arrow {
+  font-size: 40rpx;
+  font-weight: 300;
+  opacity: 0.5;
+  margin-left: 12rpx;
+  line-height: 1;
+}
+
+/* 快捷入口 */
+.shortcuts {
+  display: flex;
+  gap: 20rpx;
+  margin-top: 28rpx;
+}
+
+.shortcut-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 30rpx 0;
+  box-shadow: var(--shadow);
+}
+
+.shortcut-item:active {
+  background: var(--bg);
+}
+
+.shortcut-icon {
+  font-size: 44rpx;
+  margin-bottom: 10rpx;
+}
+
+.shortcut-text {
+  font-size: 26rpx;
+  font-weight: 500;
+  color: var(--label);
+}
+
+/* 登录弹窗 */
+.login-mask {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.login-popup {
+  width: 620rpx;
+  background: var(--card);
+  border-radius: 32rpx;
+  padding: 48rpx 40rpx 36rpx;
+  text-align: center;
+  animation: popIn 0.25s ease-out;
+}
+
+@keyframes popIn {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.login-popup-header {
+  margin-bottom: 36rpx;
+}
+
+.login-popup-title {
+  font-size: 36rpx;
+  font-weight: 700;
+  color: var(--label);
+  margin-bottom: 8rpx;
+}
+
+.login-popup-desc {
+  font-size: 24rpx;
+  color: var(--label-secondary);
+}
+
+/* 头像选择 */
+.login-avatar-wrap {
+  margin-bottom: 28rpx;
+}
+
+.login-avatar-btn {
+  width: 140rpx;
+  height: 140rpx;
+  border-radius: 50%;
+  padding: 0;
+  margin: 0 auto;
+  background: var(--bg);
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.login-avatar-btn::after { border: none; }
+
+.login-avatar {
+  width: 140rpx;
+  height: 140rpx;
+}
+
+.login-avatar-placeholder {
+  font-size: 56rpx;
+  color: var(--label-tertiary);
+}
+
+.login-avatar-hint {
+  font-size: 22rpx;
+  color: var(--label-tertiary);
+  margin-top: 8rpx;
+}
+
+/* 昵称输入 */
+.login-input-wrap {
+  margin-bottom: 20rpx;
+}
+
+.login-input {
+  width: 100%;
+  height: 88rpx;
+  background: var(--bg);
+  border-radius: var(--radius);
+  padding: 0 24rpx;
+  font-size: 30rpx;
+  color: var(--label);
+  text-align: center;
+  box-sizing: border-box;
+}
+
+/* 手机号 */
+.login-phone-btn {
+  width: 100%;
+  height: 88rpx;
+  background: rgba(52, 199, 89, 0.08);
+  color: var(--green);
+  border: none;
+  border-radius: var(--radius);
+  font-size: 28rpx;
+  font-weight: 500;
+  margin-bottom: 24rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.login-phone-btn::after { border: none; }
+
+.login-popup-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  background: var(--blue);
+  color: #ffffff;
+  border: none;
+  border-radius: var(--radius);
+  padding: 28rpx 0;
+  font-size: 32rpx;
+  font-weight: 600;
+  margin-bottom: 20rpx;
+}
+
+.login-popup-btn::after { border: none; }
+.login-popup-btn:active { opacity: 0.85; }
+
+.login-popup-cancel {
+  font-size: 28rpx;
+  color: var(--label-tertiary);
+  padding: 16rpx 0;
+}
