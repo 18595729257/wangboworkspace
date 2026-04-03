@@ -105,44 +105,46 @@ function getQueueStatus() {
   return get('/api/public/queue-status')
 }
 
-// 上传文件（base64方式，兼容微信开发者工具TLS问题）
+// 上传文件（使用 wx.uploadFile，支持更大文件，性能更好）
 function uploadFile(filePath, name) {
   return new Promise(function (resolve, reject) {
-    var uploadUrl = BASE_URL + '/api/public/upload-base64'
-    console.log('[上传] 开始(base64):', uploadUrl)
+    var uploadUrl = BASE_URL + '/api/public/upload'
+    console.log('[上传] 开始(multipart):', uploadUrl)
     console.log('[上传] 文件:', filePath)
-    wx.getFileSystemManager().readFile({
+    console.log('[上传] 文件名:', name || 'upload.pdf')
+    
+    wx.uploadFile({
+      url: uploadUrl,
       filePath: filePath,
-      encoding: 'base64',
-      success: function (fileRes) {
-        console.log('[上传] 读取成功, 大小:', fileRes.data.length)
-        wx.request({
-          url: uploadUrl,
-          method: 'POST',
-          data: {
-            fileName: name || 'upload.pdf',
-            fileData: fileRes.data,
-            fileType: 'application/pdf'
-          },
-          header: { 'Content-Type': 'application/json' },
-          timeout: 60000,
-          success: function (res) {
-            console.log('[上传] 响应:', res.statusCode, JSON.stringify(res.data).substring(0, 200))
-            if (res.statusCode === 200 && res.data.code === 200) {
-              resolve(res.data)
+      name: 'file',
+      formData: {
+        fileName: name || 'upload.pdf',
+        fileType: 'application/pdf'
+      },
+      timeout: 120000,  // 2分钟超时
+      success: function (res) {
+        console.log('[上传] 响应状态:', res.statusCode)
+        if (res.statusCode === 200) {
+          try {
+            var data = JSON.parse(res.data)
+            console.log('[上传] 解析成功:', data.code, data.msg)
+            if (data.code === 200) {
+              resolve(data)
             } else {
-              reject(res.data || { msg: '上传失败' })
+              reject({ msg: data.msg || '上传失败' })
             }
-          },
-          fail: function (err) {
-            console.error('[上传] 失败:', JSON.stringify(err))
-            reject({ msg: '网络错误', error: err })
+          } catch (e) {
+            console.error('[上传] 解析响应失败:', res.data)
+            reject({ msg: '服务器响应格式错误' })
           }
-        })
+        } else {
+          console.error('[上传] 状态码错误:', res.statusCode)
+          reject({ msg: '上传失败，状态码: ' + res.statusCode })
+        }
       },
       fail: function (err) {
-        console.error('[上传] 读取文件失败:', JSON.stringify(err))
-        reject({ msg: '读取文件失败', error: err })
+        console.error('[上传] 失败:', JSON.stringify(err))
+        reject({ msg: '网络错误', error: err })
       }
     })
   })
