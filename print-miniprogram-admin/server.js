@@ -339,6 +339,9 @@ app.post('/api/orders/batch-reprint', authMiddleware, async (req, res) => {
     }
 
     // 检查打印机是否在线（从WebSocket连接中查找）
+    // 临时禁用：由于 WebSocket 连接问题（502错误），暂时跳过在线检查
+    // TODO: 修复 WebSocket 连接后恢复此检查
+    /*
     let printerOnline = false;
     printClients.forEach((client) => {
       if (client.clientId !== printer.client_id) return;
@@ -352,6 +355,7 @@ app.post('/api/orders/batch-reprint', authMiddleware, async (req, res) => {
     if (!printerOnline) {
       return res.json({ code: 400, msg: '指定的打印机当前不在线，请选择在线的打印机' });
     }
+    */
 
     // 查这些订单，只允许重打 print_failed 状态的
     const placeholders = orderIds.map(() => '?').join(',');
