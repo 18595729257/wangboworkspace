@@ -15,6 +15,13 @@ const { hashPassword, verifyPassword, generateOrderNo, nowStr, generateToken, ve
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// 确保 uploads 目录存在
+const uploadDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+  console.log(`[启动] 创建上传目录: ${uploadDir}`);
+}
+
 // ===== 中间件 =====
 app.set('trust proxy', 1); // 信任Nginx代理，使用X-Forwarded-For获取真实IP
 app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
@@ -336,6 +343,21 @@ app.post('/api/orders/batch-reprint', authMiddleware, async (req, res) => {
     const printer = await db.getOne('SELECT * FROM printers WHERE id = ?', [printerId]);
     if (!printer) {
       return res.json({ code: 400, msg: '打印机不存在' });
+    }
+
+    // 检查打印机是否在线（从WebSocket连接中查找）
+    let printerOnline = false;
+    printClients.forEach((client) => {
+      if (client.clientId !== printer.client_id) return;
+      client.printers.forEach(p => {
+        if (p.name === printer.name) {
+          printerOnline = true;
+        }
+      });
+    });
+
+    if (!printerOnline) {
+      return res.json({ code: 400, msg: '指定的打印机当前不在线，请选择在线的打印机' });
     }
 
     // 查这些订单，只允许重打 print_failed 状态的
@@ -1420,11 +1442,42 @@ function initWebSocket(server) {
 async function assignAndPushOrder(order) {
   if (!wss) return false;
 
-  const tag = order.print_tag || getOrderTag(order.order_type, order.extra_info);
-  const target = findPrinterByTag(tag);
+  // 优先检查是否有指定的 printer_id
+  let target = null;
+  let usedMethod = '';
+
+  if (order.printer_id) {
+    // 查找指定的打印机
+    const printer = await db.getOne('SELECT * FROM printers WHERE id = ?', [order.printer_id]);
+    if (printer) {
+      // 在WebSocket连接中查找该打印机
+      printClients.forEach(client => {
+        if (client.clientId === printer.client_id) {
+          client.printers.forEach(p => {
+            if (p.name === printer.name && p.status === 'idle') {
+              target = {
+                ws: client.ws,
+                printer: p,
+                clientId: client.clientId,
+                printerId: printer.id
+              };
+            }
+          });
+        }
+      });
+      if (target) usedMethod = '指定打印机';
+    }
+  }
+
+  // 如果没有指定打印机或指定打印机未找到，根据 print_tag 匹配
+  if (!target) {
+    const tag = order.print_tag || getOrderTag(order.order_type, order.extra_info);
+    target = findPrinterByTag(tag);
+    if (target) usedMethod = `标签匹配(${tag})`;
+  }
 
   if (target) {
-    // 找到匹配打印机，推送给对应客户端
+    // 找到目标打印机，推送给对应客户端
     const msg = JSON.stringify({
       type: 'print_task',
       data: [order],
@@ -1439,11 +1492,12 @@ async function assignAndPushOrder(order) {
     await db.query("UPDATE orders SET status = 'printing', printer_id = (SELECT id FROM printers WHERE name = ? AND client_id = ? LIMIT 1), print_start_time = NOW(), updated_at = NOW() WHERE order_no = ?",
       [target.printer.name, target.clientId, order.order_no]);
 
-    console.log(`[分配] 订单 ${order.order_no} (${tag}) → ${target.printer.name} @ ${target.clientId}`);
+    console.log(`[分配] 订单 ${order.order_no} (${usedMethod}) → ${target.printer.name} @ ${target.clientId}`);
     return true;
   }
 
   // 没有匹配打印机，广播给所有客户端（降级处理）
+  const tag = order.print_tag || getOrderTag(order.order_type, order.extra_info);
   console.log(`[分配] 订单 ${order.order_no} (${tag}) → 无匹配打印机，广播`);
   const msg = JSON.stringify({ type: 'print_task', data: [order] });
   printClients.forEach((client) => {

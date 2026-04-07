@@ -224,12 +224,21 @@ createApp({
       // 加载打印机列表
       await loadPrinters();
 
+      // 只显示在线的打印机
+      const onlinePrinters = printers.value.filter(p => p.online);
+      if (onlinePrinters.length === 0) {
+        showToast('当前没有可用的在线打印机', 'error');
+        return;
+      }
+
       modal.type = 'batchReprint';
       modal.title = '批量重打';
       modal.data = {
         orderCount: selectedFailedOrders.value.length,
-        availablePrinters: printers.value, // 显示所有打印机，让管理员手动选
-        selectedPrinter: ''
+        availablePrinters: onlinePrinters, // 只显示在线打印机
+        selectedPrinter: '',
+        totalPrinters: printers.value.length,
+        onlineCount: onlinePrinters.length
       };
       modal.show = true;
     }

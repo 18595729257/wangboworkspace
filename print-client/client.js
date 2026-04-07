@@ -8,6 +8,7 @@ const fs = require('fs')
 const path = require('path')
 const config = require('./config')
 const printer = require('./printer')
+const { downloadFile } = require('./download')
 
 const downloadDir = path.resolve(config.DOWNLOAD_DIR)
 if (!fs.existsSync(downloadDir)) fs.mkdirSync(downloadDir, { recursive: true })
@@ -76,35 +77,6 @@ function api(method, endpoint, data) {
     req.on('timeout', () => { req.destroy(); reject(new Error('请求超时')) })
     if (data) req.write(JSON.stringify(data))
     req.end()
-  })
-}
-
-// ===== 下载文件 =====
-function download(url, dest) {
-  return new Promise((resolve, reject) => {
-    const lib = url.startsWith('https') ? https : http
-    const req = lib.get(url, { timeout: 120000, rejectUnauthorized: false }, res => {
-      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        return download(res.headers.location, dest).then(resolve).catch(reject)
-      }
-      if (res.statusCode !== 200) return reject(new Error(`下载失败 HTTP ${res.statusCode}`))
-
-      const chunks = []
-      res.on('data', chunk => chunks.push(chunk))
-      res.on('error', e => reject(new Error('下载中断: ' + e.message)))
-      res.on('end', () => {
-        try {
-          const buf = Buffer.concat(chunks)
-          fs.writeFileSync(dest, buf)
-          log(`下载完成: ${path.basename(dest)} (${(buf.length / 1024).toFixed(0)}KB)`)
-          resolve(dest)
-        } catch (e) {
-          reject(new Error('写入文件失败: ' + e.message))
-        }
-      })
-    })
-    req.on('error', e => { try { fs.unlinkSync(dest) } catch (_) {}; reject(e) })
-    req.on('timeout', () => { req.destroy(); reject(new Error('下载超时')) })
   })
 }
 
@@ -188,7 +160,15 @@ async function poll() {
     const r = await api('GET', `/api/public/printer/pending?clientId=${encodeURIComponent(config.CLIENT_ID)}`)
     if (r.code === 200 && r.data?.length) {
       log(`轮询发现 ${r.data.length} 个待打印`)
-      r.data.forEach(o => handleOrder(o))
+      r.data.forEach(o => {
+        // 轮询模式下自动找空闲打印机
+        const targetPrinter = o.printer || matchPrinter(null)
+        if (targetPrinter) {
+          handleOrder(o, targetPrinter.name || targetPrinter)
+        } else {
+          log(`⚠️ 订单 ${o.order_no} - 无可用打印机，跳过`)
+        }
+      })
     }
   } catch (e) {
     err('轮询失败:', e.message)
@@ -273,7 +253,7 @@ async function handleOrder(order, targetPrinter) {
     if (!fileUrl) throw new Error('订单没有文件地址')
 
     const localFile = path.join(downloadDir, `order_${orderNo}_${Date.now()}.pdf`)
-    await download(fileUrl, localFile)
+    await downloadFile(fileUrl, localFile)
 
     // 4. 验证文件
     const fileStat = fs.statSync(localFile)
