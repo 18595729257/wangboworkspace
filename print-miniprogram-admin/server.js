@@ -660,6 +660,7 @@ app.post('/api/public/upload', (req, res) => {
         const fileName = safeFileName(result.filename);
         const filePath = path.join(uploadDir, fileName);
         fs.writeFileSync(filePath, result.data);
+  console.log("🐛 [parseMultipart] Saved file:", filePath, "size:", result.data.length);
 
         // 检测页数
         const ext = path.extname(result.filename).toLowerCase();
@@ -722,6 +723,7 @@ app.post('/api/public/upload', (req, res) => {
         const fileName = safeFileName(data.fileName);
         const filePath = path.join(uploadDir, fileName);
         fs.writeFileSync(filePath, fileBuf);
+  console.log("🐛 [parseMultipart] Saved file:", filePath, "size:", fileBuf.length);
 
         const ext = path.extname(data.fileName).toLowerCase();
         let pageCount = 1;
@@ -752,56 +754,76 @@ app.post('/api/public/upload', (req, res) => {
   console.log(`[UPLOAD] 不支持的 content-type: ${contentType}`);
   res.json({ code: 400, msg: '不支持的上传格式，请使用 multipart/form-data' });
 });
-
-// 手动解析 multipart/form-data
-function parseMultipart(buf, boundary) {
-  const boundaryBuf = Buffer.from('--' + boundary);
-  const endBuf = Buffer.from('--' + boundary + '--');
-
-  // 找到第一个 boundary
-  let pos = indexOf(buf, boundaryBuf, 0);
-  if (pos === -1) return null;
-
-  // 跳过 boundary + CRLF
-  pos = pos + boundaryBuf.length;
-  if (buf[pos] === 0x0D && buf[pos + 1] === 0x0A) pos += 2; // \r\n
-
-  // 找到下一个 boundary（内容结束位置）
-  const nextBoundary = indexOf(buf, boundaryBuf, pos);
-  if (nextBoundary === -1) return null;
-
-  // 内容区域 = [pos, nextBoundary - 2]（去掉末尾 \r\n）
-  const contentArea = buf.slice(pos, nextBoundary);
-
-  // 找到 header 和 body 的分界（\r\n\r\n）
-  const headerEnd = indexOf(contentArea, Buffer.from('\r\n\r\n'), 0);
-  if (headerEnd === -1) return null;
-
-  const headerStr = contentArea.slice(0, headerEnd).toString('utf8');
-  const bodyStart = headerEnd + 4; // 跳过 \r\n\r\n
-  const bodyEnd = contentArea.length - (contentArea[contentArea.length - 2] === 0x0D ? 2 : 0); // 去掉末尾 \r\n
-  const body = contentArea.slice(bodyStart, bodyEnd);
-
-  // 解析 filename
-  const filenameMatch = headerStr.match(/filename="([^"]+)"/i);
-  const filename = filenameMatch ? filenameMatch[1] : 'upload.bin';
-
-  return { filename, data: body };
-}
-
-// Buffer 中查找子 Buffer 的位置
-function indexOf(buf, search, start) {
-  for (let i = start; i <= buf.length - search.length; i++) {
-    let found = true;
-    for (let j = 0; j < search.length; j++) {
-      if (buf[i + j] !== search[j]) { found = false; break; }
+// 提供上传文件的静态访问
+// 手动解析 multipart/form-data（适配小程序格式：fileName + file）
+// 辅助函数：在 Buffer 中查找子 Buffer
+function indexOf(buf, subbuf, start) {
+  for (let i = start; i <= buf.length - subbuf.length; i++) {
+    let match = true;
+    for (let j = 0; j < subbuf.length; j++) {
+      if (buf[i + j] !== subbuf[j]) {
+        match = false;
+        break;
+      }
     }
-    if (found) return i;
+    if (match) return i;
   }
   return -1;
 }
+function parseMultipart(buf, boundary) {
+  const boundaryBuf = Buffer.from('--' + boundary);
+  console.log("🐛 [parseMultipart] buf.length =", buf.length);
+  console.log("🐛 [parseMultipart] boundary =", boundary);
 
-// 提供上传文件的静态访问
+  // 查找所有的 boundary 位置
+  let boundaries = [];
+  let pos = 0;
+  while (true) {
+    pos = indexOf(buf, boundaryBuf, pos);
+    if (pos === -1) break;
+    boundaries.push(pos);
+    pos = pos + boundaryBuf.length;
+  }
+
+  console.log("🐛 [parseMultipart] boundaries count =", boundaries.length);
+
+  if (boundaries.length < 3) return null;
+
+  // 遍历每个 part，找到 name="file" 的部分
+  for (let i = 0; i < boundaries.length - 1; i++) {
+    const partStart = boundaries[i] + boundaryBuf.length;
+    const partEnd = boundaries[i + 1];
+
+    // 跳过 CRLF
+    let dataStart = partStart;
+    if (buf[dataStart] === 0x0D && buf[dataStart + 1] === 0x0A) dataStart += 2;
+
+    const contentArea = buf.slice(dataStart, partEnd);
+
+    // 找到 header 和 body 的分界
+    const headerEnd = indexOf(contentArea, Buffer.from('\r\n\r\n'), 0);
+    if (headerEnd === -1) continue;
+
+    const headerStr = contentArea.slice(0, headerEnd).toString('utf8');
+    console.log("🐛 [parseMultipart] part", i, "header:", headerStr);
+
+    const bodyStart = headerEnd + 4;
+    const bodyEnd = contentArea.length - (contentArea[contentArea.length - 2] === 0x0D ? 2 : 0);
+    const body = contentArea.slice(bodyStart, bodyEnd);
+    console.log("🐛 [parseMultipart] part", i, "body.length =", body.length);
+
+    // 检查是否是 file 字段
+    if (headerStr.includes('name="file"')) {
+      const filenameMatch = headerStr.match(/filename="([^"]+)"/i);
+      const filename = filenameMatch ? filenameMatch[1] : 'upload.bin';
+      console.log("✅ [parseMultipart] 找到 file 字段: filename =", filename, ", size =", body.length);
+      return { filename, data: body };
+    }
+  }
+
+  console.error("❌ [parseMultipart] 未找到 name=\"file\" 字段");
+  return null;
+}
 app.use('/uploads', express.static(uploadDir));
 
 // 获取基础URL
