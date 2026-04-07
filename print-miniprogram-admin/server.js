@@ -15,13 +15,6 @@ const { hashPassword, verifyPassword, generateOrderNo, nowStr, generateToken, ve
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// 确保 uploads 目录存在
-const uploadDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-  console.log(`[启动] 创建上传目录: ${uploadDir}`);
-}
-
 // ===== 中间件 =====
 app.set('trust proxy', 1); // 信任Nginx代理，使用X-Forwarded-For获取真实IP
 app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
@@ -1518,34 +1511,18 @@ async function start() {
     // 初始化缓存
     cache.init();
 
-    // HTTP 服务器（Nginx 反代用）
+    // HTTP 服务器（监听 3000 端口，由 Nginx 反代到 443）
     const http = require('http');
     const server = http.createServer(app).listen(PORT, '127.0.0.1', () => {
       console.log(`\n🖨️  打印管理后台已启动`);
-      console.log(`   地址: http://127.0.0.1:${PORT} (Nginx反代)`);
+      console.log(`   地址: http://127.0.0.1:${PORT} (Nginx反代到 443)`);
+      console.log(`   WebSocket: ws://127.0.0.1:${PORT}/ws/printer (Nginx反代到 wss://)`);
       console.log(`   账号: admin / admin123`);
       console.log(`   环境: ${process.env.NODE_ENV || 'development'}`);
     });
 
-    // 初始化 WebSocket
+    // 初始化 WebSocket（绑定到 HTTP 服务器）
     initWebSocket(server);
-    console.log('');
-
-    // HTTPS 服务器（直接监听443，绕过Nginx TLS问题）
-    const https = require('https');
-    const fsSync = require('fs');
-    try {
-      const httpsOptions = {
-        key: fsSync.readFileSync('/etc/letsencrypt/live/xinbingcloudprint.top/privkey.pem'),
-        cert: fsSync.readFileSync('/etc/letsencrypt/live/xinbingcloudprint.top/fullchain.pem')
-      };
-      const httpsServer = https.createServer(httpsOptions, app).listen(443, '0.0.0.0', () => {
-        console.log('   HTTPS: https://0.0.0.0:443 (直连)');
-      });
-      initWebSocket(httpsServer);
-    } catch(e) {
-      console.log('HTTPS 启动失败:', e.message);
-    }
   } catch (err) {
     console.error('启动失败:', err.message);
     console.error('请检查 MySQL 配置和 .env 文件');
