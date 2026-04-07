@@ -670,9 +670,12 @@ app.post('/api/public/upload', (req, res) => {
           pageCount = 1;
         }
 
-        // 构建URL
+        // 构建URL (强制使用域名，避免 IP 地址导致证书验证失败)
         const proto = req.headers['x-forwarded-proto'] || 'https';
-        const host = req.headers['x-forwarded-host'] || req.headers.host || 'xinbingcloudprint.top';
+        // 如果 x-forwarded-host 不是域名（例如 IP），则使用默认域名
+        const forwardedHost = req.headers['x-forwarded-host'] || '';
+        const isIpOnly = /^\d+\.\d+\.\d+\.\d+$/.test(forwardedHost);
+        const host = (forwardedHost && !isIpOnly) ? forwardedHost : 'xinbingcloudprint.top';
         const fileUrl = `${proto}://${host}/uploads/${fileName}`;
 
         console.log(`[UPLOAD] 保存成功: ${fileName}, pages=${pageCount}, 耗时=${Date.now() - startTime}ms`);
@@ -725,7 +728,10 @@ app.post('/api/public/upload', (req, res) => {
         if (ext === '.pdf') pageCount = detectPdfPages(filePath);
 
         const proto = req.headers['x-forwarded-proto'] || 'https';
-        const host = req.headers['x-forwarded-host'] || req.headers.host || 'xinbingcloudprint.top';
+        // 如果 x-forwarded-host 不是域名（例如 IP），则使用默认域名
+        const forwardedHost = req.headers['x-forwarded-host'] || '';
+        const isIpOnly = /^\d+\.\d+\.\d+\.\d+$/.test(forwardedHost);
+        const host = (forwardedHost && !isIpOnly) ? forwardedHost : 'xinbingcloudprint.top';
         const fileUrl = `${proto}://${host}/uploads/${fileName}`;
 
         console.log(`[UPLOAD] base64上传成功: ${data.fileName}, size=${fileBuf.length}, pages=${pageCount}`);
