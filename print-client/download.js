@@ -6,12 +6,18 @@ const path = require('path')
 
 function downloadFile(url, destPath) {
   return new Promise((resolve, reject) => {
-    const protocol = url.startsWith('https') ? https : http
+    // 如果 URL 使用的是 IP 地址，自动替换为域名，避免 SSL 证书验证失败
+    const correctDomain = 'xinbingcloudprint.top';
+    const safeUrl = url.replace('39.104.59.201', correctDomain).replace('xinbingprint.top', correctDomain);
+    const protocol = safeUrl.startsWith('https') ? https : http
 
     console.log(`[下载] URL: ${url}`)
+    if (safeUrl !== url) {
+      console.log(`[下载] 已自动替换为正确域名: ${safeUrl}`)
+    }
     console.log(`[下载] 保存到: ${destPath}`)
 
-    protocol.get(url, { timeout: 30000 }, (res) => {
+    protocol.get(safeUrl, { timeout: 30000 }, (res) => {
       console.log(`[下载] 响应状态: ${res.statusCode}`)
       console.log(`[下载] Content-Type: ${res.headers['content-type']}`)
       console.log(`[下载] Content-Length: ${res.headers['content-length']}`)
