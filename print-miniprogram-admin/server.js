@@ -1290,7 +1290,9 @@ function findPrinterByTag(tag) {
 
     client.printers.forEach(p => {
       if (p.status !== 'idle') return;
-      if (!p.tags.includes(tag)) return;
+      if (!p.tags || !p.tags.includes(tag)) return;
+      // 关键修复：检查打印机是否启用
+      if (p.enabled !== 1 && p.enabled !== true) return;
 
       // 匹配成功，选负载最低的
       const load = p.totalJobs || 0;
@@ -1350,20 +1352,29 @@ function initWebSocket(server) {
 
           // 同步打印机到数据库
           for (const p of printers) {
-            const tagsStr = p.tags.join(',');
             const existing = await db.getOne(
-              'SELECT id FROM printers WHERE name = ? AND client_id = ?', [p.name, clientId]
+              'SELECT id, tags, enabled FROM printers WHERE name = ? AND client_id = ?', [p.name, clientId]
             );
             if (existing) {
+              // 从数据库读取标签和启用状态，更新到内存
+              const dbTags = existing.tags ? existing.tags.split(',') : ['normal'];
+              p.tags = dbTags;
+              p.enabled = existing.enabled;
+              
+              // 只更新状态和心跳，保留数据库中的标签和启用配置
               await db.query(
-                'UPDATE printers SET tags = ?, status = ?, last_heartbeat = NOW(), updated_at = NOW() WHERE id = ?',
-                [tagsStr, 'idle', existing.id]
+                'UPDATE printers SET status = ?, last_heartbeat = NOW(), updated_at = NOW() WHERE id = ?',
+                ['idle', existing.id]
               );
             } else {
+              // 新增打印机，默认标签为 'normal'，启用状态为 1
               await db.query(
-                'INSERT INTO printers (name, port, description, client_id, tags, status, last_heartbeat, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW(), NOW())',
-                [p.name, p.name, `${clientName} 的打印机`, clientId, tagsStr, 'idle']
+                'INSERT INTO printers (name, port, description, client_id, tags, status, enabled, last_heartbeat, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), NOW())',
+                [p.name, p.name, `${clientName} 的打印机`, clientId, 'normal', 'idle', 1]
               );
+              // 新打印机的标签和启用状态也设置到内存中
+              p.tags = ['normal'];
+              p.enabled = 1;
             }
           }
 
