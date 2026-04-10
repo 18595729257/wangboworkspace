@@ -1,41 +1,56 @@
-# ===== 依赖 =====
+# 依赖
 node_modules/
 
-# ===== 环境变量（敏感信息） =====
+# 环境配置（包含敏感信息）
 .env
-*.env.local
-*.env.production
+.env.*
+!.env.example
 
-# ===== 配置文件（包含敏感信息） =====
-*.private.config.json
-config.js
+# 私有配置
+project.private.config.json
+miniprogram/config.local.js
 
-# ===== 日志 =====
+# 日志
 logs/
 *.log
+client.out.log
+client.pid
+print-client/client.log
 
-# ===== 临时文件 =====
+# 下载目录
 downloads/
-tmp/
-.temp/
 
-# ===== macOS 系统文件 =====
-.DS_Store
-.AppleDouble
-.LSOverride
+# 上传文件（生产环境）
+uploads/
 
-# ===== 编辑器 =====
-.vscode/
+# 运行时文件
+*.pid
+*.sock
+
+# 备份文件
+*.backup
+*.bak
+
+# 编译产物
+dist/
+build/
+
+# IDE
 .idea/
+.vscode/
 *.swp
 *.swo
 
-# ===== PM2 =====
-.pm2/
+# OS
+.DS_Store
+Thumbs.db
 
-# ===== 上传文件 =====
-uploads/
+# 测试覆盖率
+coverage/
 
-# ===== 数据库 =====
-*.sqlite
-*.db
+# 微信小程序
+print-miniprogram/miniprogram/npm/
+print-miniprogram/miniprogram/node_modules/
+
+# 服务器端编译产物（如有）
+server.js.backup*

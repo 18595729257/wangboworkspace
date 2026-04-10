@@ -31,7 +31,7 @@
   },
   "appid": "wx6829e86ce05382c8",
   "projectname": "print-miniprogram",
-  "libVersion": "2.25.0",
+  "libVersion": "3.15.1",
   "condition": {},
   "srcMiniprogramRoot": "miniprogram/",
   "compileType": "miniprogram",

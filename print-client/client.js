@@ -82,7 +82,7 @@ function api(method, endpoint, data) {
 
 // ===== WebSocket 连接 =====
 function connectWS() {
-  const url = config.WS_URL || 'wss://121.43.241.95:3000/ws/printer'
+  const url = config.WS_URL || 'wss://xinbingcloudprint.top/ws/printer'
   log(`连接 WebSocket: ${url}`)
   try {
     ws = new (require('ws'))(url, { rejectUnauthorized: false })
