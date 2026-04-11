@@ -79,6 +79,8 @@ router.get('/config', async (req, res) => {
     'shop_name', 'price_bw', 'price_color', 'service_fee',
     'enable_points', 'points_earn_rate', 'points_deduct_rate',
     'max_points_discount', 'enable_payment', 'enable_print',
+    // 小程序首页入口开关
+    'enable_upload', 'enable_idcard', 'enable_photo', 'enable_factory',
   ]
   const pub = {}
   publicKeys.forEach(k => { if (config[k] !== undefined) pub[k] = config[k] })

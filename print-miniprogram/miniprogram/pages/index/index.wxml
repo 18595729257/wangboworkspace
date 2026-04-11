@@ -45,7 +45,7 @@
     <view class="service-grid">
 
       <!-- 文档&图片打印 -->
-      <view class="service-card card-blue" bindtap="goToUpload">
+      <view wx:if="{{enableUpload}}" class="service-card card-blue" bindtap="goToUpload">
         <view class="service-hot" wx:if="{{false}}">🔥</view>
         <view class="service-icon-wrap">
           <view class="service-icon">▤</view>
@@ -56,9 +56,19 @@
         </view>
         <view class="service-arrow">›</view>
       </view>
+      <view wx:else class="service-card card-disabled">
+        <view class="service-icon-wrap">
+          <view class="service-icon">▤</view>
+        </view>
+        <view class="service-info">
+          <view class="service-name">文档&图片打印</view>
+          <view class="service-desc">暂未上线，敬请期待</view>
+        </view>
+        <view class="service-arrow">›</view>
+      </view>
 
       <!-- 证件复印 -->
-      <view class="service-card card-orange" bindtap="goToIdCardCopy">
+      <view wx:if="{{enableIdcard}}" class="service-card card-orange" bindtap="goToIdCardCopy">
         <view class="service-icon-wrap">
           <view class="service-icon">⊞</view>
         </view>
@@ -68,9 +78,19 @@
         </view>
         <view class="service-arrow">›</view>
       </view>
+      <view wx:else class="service-card card-disabled">
+        <view class="service-icon-wrap">
+          <view class="service-icon">⊞</view>
+        </view>
+        <view class="service-info">
+          <view class="service-name">证件复印</view>
+          <view class="service-desc">暂未上线，敬请期待</view>
+        </view>
+        <view class="service-arrow">›</view>
+      </view>
 
       <!-- 照片打印 -->
-      <view class="service-card card-purple" bindtap="goToPhotoPrint">
+      <view wx:if="{{enablePhoto}}" class="service-card card-purple" bindtap="goToPhotoPrint">
         <view class="service-icon-wrap">
           <view class="service-icon">◈</view>
         </view>
@@ -80,9 +100,19 @@
         </view>
         <view class="service-arrow">›</view>
       </view>
+      <view wx:else class="service-card card-disabled">
+        <view class="service-icon-wrap">
+          <view class="service-icon">◈</view>
+        </view>
+        <view class="service-info">
+          <view class="service-name">照片打印</view>
+          <view class="service-desc">暂未上线，敬请期待</view>
+        </view>
+        <view class="service-arrow">›</view>
+      </view>
 
       <!-- 工厂发货 -->
-      <view class="service-card card-yellow" bindtap="goToFactoryPrint">
+      <view wx:if="{{enableFactory}}" class="service-card card-yellow" bindtap="goToFactoryPrint">
         <view class="service-hot">🔥</view>
         <view class="service-icon-wrap">
           <view class="service-icon">▦</view>
@@ -90,6 +120,16 @@
         <view class="service-info">
           <view class="service-name">5分一页 工厂发货</view>
           <view class="service-desc">每天17:00前订单当天发走 | 全国多地次日达</view>
+        </view>
+        <view class="service-arrow">›</view>
+      </view>
+      <view wx:else class="service-card card-disabled">
+        <view class="service-icon-wrap">
+          <view class="service-icon">▦</view>
+        </view>
+        <view class="service-info">
+          <view class="service-name">5分一页 工厂发货</view>
+          <view class="service-desc">暂未上线，敬请期待</view>
         </view>
         <view class="service-arrow">›</view>
       </view>

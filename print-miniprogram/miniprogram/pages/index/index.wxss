@@ -157,6 +157,16 @@
 .card-purple { background: linear-gradient(160deg, #AF52DE 0%, #8944AB 100%); }
 .card-yellow { background: linear-gradient(160deg, #FFD60A 0%, #F0C800 100%); color: #333; }
 
+/* 禁用状态入口 */
+.card-disabled {
+  background: linear-gradient(160deg, #E5E5EA 0%, #D1D1D6 100%);
+  color: #8E8E93;
+  opacity: 0.8;
+}
+.card-disabled .service-icon { color: #8E8E93; }
+.card-disabled .service-name { color: #636366; }
+.card-disabled .service-desc { color: #8E8E93; }
+
 .service-hot {
   position: absolute;
   top: 10rpx;

@@ -1,28 +1,39 @@
-<!--pages/upload/upload.wxml-->
+<!--pages/upload/upload.wxml - 【多文件版本】-->
 <view class="container">
   <!-- 文件选择 -->
   <view class="card">
-    <view class="card-title">选择文件</view>
+    <view class="card-title">选择文件（{{selectedFiles.length}}/{{maxFiles}}）</view>
     
-    <view wx:if="{{!selectedFile}}" class="file-picker" bindtap="chooseFile">
+    <!-- 空状态 -->
+    <view wx:if="{{selectedFiles.length === 0}}" class="file-picker" bindtap="chooseFile">
       <view class="picker-icon">＋</view>
       <view class="picker-text">点击选择要打印的文件</view>
-      <view class="picker-hint">支持 PDF、Word、Excel、PPT、图片</view>
+      <view class="picker-hint">支持 PDF、Word、Excel、PPT、图片，最多{{maxFiles}}个</view>
     </view>
     
-    <view wx:else class="file-selected">
-      <view class="file-info">
-        <view class="file-icon">📎</view>
-        <view class="file-detail">
-          <view class="file-name">{{selectedFile.name}}</view>
-          <view class="file-meta">
-            <text class="file-size">{{selectedFile.sizeText}}</text>
-            <text wx:if="{{uploading}}" class="file-page-status parsing">解析页数中...</text>
-            <text wx:elif="{{serverPageCount}}" class="file-page-status ready">共{{serverPageCount}}页</text>
+    <!-- 文件列表 -->
+    <view wx:else class="file-list">
+      <view wx:for="{{selectedFiles}}" wx:key="index" class="file-item">
+        <view class="file-info">
+          <view class="file-icon">{{item.type === 'image' ? '🖼️' : '📎'}}</view>
+          <view class="file-detail">
+            <view class="file-name">{{item.name}}</view>
+            <view class="file-meta">
+              <text class="file-size">{{item.sizeText}}</text>
+              <text wx:if="{{item.status === 'uploading'}}" class="file-status parsing">解析中...</text>
+              <text wx:elif="{{item.status === 'error'}}" class="file-status error">上传失败</text>
+              <text wx:elif="{{item.pageCount}}" class="file-status ready">{{item.pageCount}}页</text>
+            </view>
           </view>
         </view>
+        <view class="file-remove" bindtap="removeFile" data-index="{{index}}">✕</view>
       </view>
-      <view class="file-remove" bindtap="removeFile">✕</view>
+      
+      <!-- 添加更多文件按钮 -->
+      <view wx:if="{{selectedFiles.length < maxFiles}}" class="file-add" bindtap="chooseFile">
+        <view class="add-icon">＋</view>
+        <view class="add-text">添加更多文件</view>
+      </view>
     </view>
   </view>
 
@@ -31,10 +42,9 @@
     <view class="card-title">打印设置</view>
     
     <view class="setting-item">
-      <view class="setting-label">打印页数</view>
+      <view class="setting-label">总页数</view>
       <view class="setting-value">
-        <input type="number" value="{{pageCount}}" bindinput="setPageCount" placeholder="页数" />
-        <text class="setting-unit">页</text>
+        <text class="page-total">{{totalPageCount}}页</text>
       </view>
     </view>
     
@@ -137,9 +147,8 @@
 
   <!-- 提交按钮 -->
   <view class="submit-area">
-    <button class="btn-primary submit-btn" disabled="{{!selectedFile || loading || uploading}}" bindtap="createOrderAndPay">
-      <text wx:if="{{uploading}}">解析页数中...</text>
-      <text wx:elif="{{loading}}">创建中...</text>
+    <button class="btn-primary submit-btn" disabled="{{selectedFiles.length === 0 || loading}}" bindtap="createOrderAndPay">
+      <text wx:if="{{loading}}">创建中...</text>
       <text wx:else>立即支付 ¥{{actualPay}}</text>
     </button>
     <view class="submit-hint">支付后自动进入打印队列</view>

@@ -335,3 +335,21 @@
 .action-cancel:active {
   background: var(--bg);
 }
+
+/* 多文件列表 */
+.file-list { display: flex; flex-direction: column; gap: 16rpx; }
+.file-item { display: flex; align-items: center; justify-content: space-between; padding: 20rpx 24rpx; background: rgba(0, 122, 255, 0.04); border-radius: var(--radius); border: 1rpx solid rgba(0, 122, 255, 0.12); }
+.file-item .file-icon { font-size: 40rpx; margin-right: 16rpx; flex-shrink: 0; }
+.file-item .file-detail { flex: 1; min-width: 0; }
+.file-item .file-name { font-size: 28rpx; font-weight: 500; color: var(--label); margin-bottom: 6rpx; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-item .file-meta { display: flex; align-items: center; gap: 16rpx; font-size: 24rpx; }
+.file-item .file-status { font-size: 22rpx; padding: 2rpx 10rpx; border-radius: 8rpx; }
+.file-item .file-status.parsing { color: #FF9500; background: rgba(255, 149, 0, 0.1); }
+.file-item .file-status.ready { color: #34C759; background: rgba(52, 199, 89, 0.1); }
+.file-item .file-status.error { color: #FF3B30; background: rgba(255, 59, 48, 0.1); }
+.file-add { display: flex; align-items: center; justify-content: center; padding: 30rpx; border: 2rpx dashed var(--separator-strong); border-radius: var(--radius); background: var(--bg); gap: 12rpx; }
+.file-add:active { border-color: var(--blue); background: rgba(0, 122, 255, 0.03); }
+.add-icon { font-size: 36rpx; color: var(--blue); }
+.add-text { font-size: 28rpx; color: var(--blue); }
+.page-total { font-size: 32rpx; font-weight: 600; color: var(--blue); }
+

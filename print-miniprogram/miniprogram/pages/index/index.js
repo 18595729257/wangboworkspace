@@ -11,7 +11,12 @@ Page({
     printerStatus: 'idle',
     queueCount: 0,
     hasNotify: false,
-    noticeText: '营业时间 8:00-22:00 · 支持微信支付'
+    noticeText: '营业时间 8:00-22:00 · 支持微信支付',
+    // 入口开关配置
+    enableUpload: true,
+    enableIdcard: true,
+    enablePhoto: true,
+    enableFactory: true
   },
 
   onLoad: function () { this.loadData() },
@@ -61,7 +66,14 @@ Page({
         if (c.shop_name) {
           self.setData({ shopName: c.shop_name })
         }
-        self.setData({ noticeText: notice })
+        // 入口开关配置（字符串'1'或'0'转布尔）
+        self.setData({
+          noticeText: notice,
+          enableUpload: c.enable_upload !== '0',
+          enableIdcard: c.enable_idcard !== '0',
+          enablePhoto: c.enable_photo !== '0',
+          enableFactory: c.enable_factory !== '0'
+        })
       }
     }).catch(function () {})
   },

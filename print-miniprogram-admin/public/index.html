@@ -431,6 +431,39 @@
               </select>
             </div>
           </div>
+
+          <!-- 【新增】小程序首页入口开关 -->
+          <div class="card settings-card">
+            <h3>小程序首页入口开关</h3>
+            <div class="form-row">
+              <label>文档&图片打印</label>
+              <select v-model="config.enable_upload">
+                <option value="1">显示</option>
+                <option value="0">隐藏</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <label>证件复印</label>
+              <select v-model="config.enable_idcard">
+                <option value="1">显示</option>
+                <option value="0">隐藏</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <label>照片打印</label>
+              <select v-model="config.enable_photo">
+                <option value="1">显示</option>
+                <option value="0">隐藏</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <label>工厂发货</label>
+              <select v-model="config.enable_factory">
+                <option value="1">显示</option>
+                <option value="0">隐藏</option>
+              </select>
+            </div>
+          </div>
           <div class="card settings-card">
             <h3>修改密码</h3>
             <div class="form-row">
