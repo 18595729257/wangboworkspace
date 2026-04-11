@@ -147,15 +147,31 @@ function init(server) {
             }
           }
 
-          // 推送待打印订单（按标签匹配）
+          // 推送待打印订单（按标签匹配，跳过禁用打印机）
           for (const p of printers) {
+            if (p.enabled !== 1 && p.enabled !== true) continue  // 跳过禁用打印机
             const tags = p.tags.join(',')
             const pending = await db.query(
               `SELECT * FROM orders WHERE status = 'paid' AND (file_url IS NOT NULL AND file_url != '') AND FIND_IN_SET(print_tag, ?) > 0 ORDER BY created_at ASC LIMIT 10`,
               [tags]
             )
             if (pending.length > 0) {
-              ws.send(JSON.stringify({ type: 'print_task', data: pending, targetPrinter: p.name }))
+              // 为每个订单获取完整打印文件列表（含封面）
+              for (const order of pending) {
+                let printFiles = [{ name: order.file_name, url: order.file_url, isCover: false }]
+                try {
+                  printFiles = await getOrderPrintFiles(order)
+                } catch (e) {
+                  console.error('[WS] 获取打印文件失败:', e.message)
+                }
+                ws.send(JSON.stringify({
+                  type: 'print_task',
+                  data: [order],
+                  printFiles: printFiles,
+                  hasCover: printFiles.some(f => f.isCover),
+                  targetPrinter: p.name,
+                }))
+              }
             }
           }
 
@@ -232,6 +248,9 @@ function init(server) {
   console.log(`   WebSocket: ws://0.0.0.0:${process.env.PORT || 3000}/ws/printer`)
 }
 
+// 封面+文件服务
+const { getOrderPrintFiles } = require('./cover')
+
 // ===== 智能分配并推送打印任务 =====
 async function assignAndPushOrder(order) {
   if (!wss || wss.clients.size === 0) return false
@@ -243,10 +262,10 @@ async function assignAndPushOrder(order) {
   if (order.printer_id) {
     const printer = await db.getOne('SELECT * FROM printers WHERE id = ?', [order.printer_id])
     if (printer) {
-      global.printClients.forEach(client => {
+      global.printClients.forEach((client, _clientId) => {
         client.printers.forEach(p => {
           if (p.name === printer.name && p.status === 'idle' && (p.enabled === 1 || p.enabled === true)) {
-            target = { ws: client.ws, printer: p, clientId: client.clientId }
+            target = { ws: client.ws, printer: p, clientId: _clientId }
           }
         })
       })
@@ -262,9 +281,19 @@ async function assignAndPushOrder(order) {
   }
 
   if (target) {
+    // 获取所有打印文件（封面在前，原文件在后）
+    let printFiles = [{ name: order.file_name, url: order.file_url, isCover: false }]
+    try {
+      printFiles = await getOrderPrintFiles(order)
+    } catch (e) {
+      console.error('[WS] 获取打印文件失败:', e.message)
+    }
+
     const msg = JSON.stringify({
       type: 'print_task',
       data: [order],
+      printFiles: printFiles,
+      hasCover: printFiles.some(f => f.isCover),
       targetPrinter: target.printer.name,
     })
     target.ws.send(msg)
@@ -294,10 +323,21 @@ async function assignAndPushOrder(order) {
   // 无匹配：广播给所有客户端（降级）
   const tag = order.print_tag || getOrderTag(order.order_type, order.extra_info)
   console.log(`[分配] 订单 ${order.order_no} (${tag}) → 无匹配打印机，广播`)
-  const msg = JSON.stringify({ type: 'print_task', data: [order] })
-  global.printClients.forEach(client => {
-    if (client.ws?.readyState === WebSocket.OPEN) client.ws.send(msg)
-  })
+  // 获取所有打印文件
+    let printFiles = [{ name: order.file_name, url: order.file_url, isCover: false }]
+    try {
+      printFiles = await getOrderPrintFiles(order)
+    } catch {}
+
+    const msg = JSON.stringify({
+      type: 'print_task',
+      data: [order],
+      printFiles: printFiles,
+      hasCover: printFiles.some(f => f.isCover),
+    })
+    global.printClients.forEach(client => {
+      if (client.ws?.readyState === WebSocket.OPEN) client.ws.send(msg)
+    })
   return false
 }
 

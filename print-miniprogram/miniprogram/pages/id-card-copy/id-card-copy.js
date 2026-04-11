@@ -116,7 +116,9 @@ Page({
       return
     }
 
-    var openid = app.globalData.openid || ('anon_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6))
+    var identity = app.getOrderIdentity()
+    var openid = identity.openid
+    var deviceId = identity.deviceId
 
     this.setData({ loading: true })
     var selectedType = this.data.selectedType
@@ -129,7 +131,8 @@ Page({
     }
 
     api.createOrder({
-      openid: openid,
+      openid: openid || null,
+      deviceId: deviceId || null,
       fileName: '证件复印-' + card.name,
       pageCount: 1,
       copies: this.data.copies,

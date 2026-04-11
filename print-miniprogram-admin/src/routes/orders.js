@@ -1,8 +1,8 @@
-// src/routes/orders.js - 订单管理
+// src/routes/orders.js - 订单管理（升级版：支持所有状态重打 + 多文件）
 const express = require('express')
 const db = require('../db')
 const cache = require('../cache')
-const { ok, fail, notFound, statusText, shanghaiNow } = require('../utils')
+const { ok, fail, notFound, statusText, shanghaiNow, shanghaiDate } = require('../utils')
 
 const router = express.Router()
 const VALID_STATUSES = ['pending', 'paid', 'printing', 'completed', 'cancelled', 'print_failed']
@@ -39,8 +39,15 @@ router.get('/', async (req, res) => {
       ).then(([rows]) => rows),
     ])
 
+    // 解析 files JSON 字段，补全 printSeq
+    const ordersWithFiles = list.map(o => ({
+      ...o,
+      files: o.files ? (typeof o.files === 'string' ? JSON.parse(o.files) : o.files) : null,
+      printSeq: o.order_seq ? String(o.order_seq).padStart(4, '0') : null,
+    }))
+
     ok(res, {
-      list,
+      list: ordersWithFiles,
       total: countRow.total,
       page: parseInt(page),
       pageSize: parseInt(pageSize),
@@ -52,10 +59,19 @@ router.get('/', async (req, res) => {
   }
 })
 
+// GET /api/orders/seq（必须在 /:id 之前！）
+router.get('/seq', async (req, res) => {
+  const today = shanghaiDate()
+  const seq = await db.getOne('SELECT current_seq FROM order_sequences WHERE seq_date = ?', [today])
+  ok(res, { date: today, currentSeq: seq?.current_seq || 0, nextSeq: (seq?.current_seq || 0) + 1 })
+})
+
 // GET /api/orders/:id
 router.get('/:id', async (req, res) => {
   const order = await db.getOne('SELECT * FROM orders WHERE id = ?', [req.params.id])
   if (!order) return notFound(res, '订单不存在')
+  if (order.files) order.files = typeof order.files === 'string' ? JSON.parse(order.files) : order.files
+  if (order.order_seq) order.printSeq = String(order.order_seq).padStart(4, '0')
   ok(res, order)
 })
 
@@ -84,9 +100,9 @@ router.put('/:id/status', async (req, res) => {
       }
       if (status === 'completed') {
         updates.print_end_time = now
-        const configRows = await conn.query('SELECT `key`, `value` FROM config')
+        const [configRows] = await conn.query('SELECT `key`, `value` FROM config')
         const config = {}
-        configRows[0].forEach(r => { config[r.key] = r.value })
+        configRows.forEach(r => { config[r.key] = r.value })
 
         if (config.enable_points === '1' && order.openid) {
           const pointsEarned = Math.floor(parseFloat(order.actual_pay))
@@ -156,11 +172,11 @@ router.get('/export/csv', async (req, res) => {
   const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : ''
   const orders = await db.query(`SELECT * FROM orders ${where} ORDER BY created_at DESC`, params)
 
-  const header = '订单号,文件名,页数,份数,颜色,打印费,服务费,实付金额,状态,创建时间\n'
+  const header = '订单号,文件名,页数,份数,颜色,打印费,服务费,实付金额,状态,序号,创建时间\n'
   const rows = orders.map(o =>
     `${o.order_no},${o.file_name},${o.page_count},${o.copies},` +
     `${o.color_mode === 'color' ? '彩色' : '黑白'},${o.print_fee},${o.service_fee},` +
-    `${o.actual_pay},${statusText(o.status)},${o.created_at}`
+    `${o.actual_pay},${statusText(o.status)},${o.order_seq || ''},${o.created_at}`
   ).join('\n')
 
   res.setHeader('Content-Type', 'text/csv; charset=utf-8')
@@ -168,7 +184,8 @@ router.get('/export/csv', async (req, res) => {
   res.send('\uFEFF' + header + rows)
 })
 
-// POST /api/orders/batch-reprint
+// ===== 【升级1】POST /api/orders/batch-reprint =====
+// 支持所有状态订单重打：completed、print_failed、printing、paid、pending
 router.post('/batch-reprint', async (req, res) => {
   try {
     const { orderIds, printerId } = req.body
@@ -179,33 +196,54 @@ router.post('/batch-reprint', async (req, res) => {
     if (!printer) return fail(res, 400, '打印机不存在')
 
     const placeholders = orderIds.map(() => '?').join(',')
-    const orders = await db.query(`SELECT * FROM orders WHERE id IN (${placeholders})`, orderIds)
-
-    const failedOrders = orders.filter(o => o.status === 'print_failed')
-    const skippedOrders = orders.filter(o => o.status !== 'print_failed')
-    if (failedOrders.length === 0) {
-      return fail(res, 400, '没有可重打的失败订单（只有打印失败的订单才能重打）')
-    }
-
-    const failedIds = failedOrders.map(o => o.id)
-    const now = shanghaiNow()
-    await db.query(
-      `UPDATE orders SET status = 'paid', printer_id = ?, print_tag = 'normal', updated_at = ? WHERE id IN (${placeholders})`,
-      [printerId, now, ...failedIds]
+    const orders = await db.query(
+      `SELECT * FROM orders WHERE id IN (${placeholders})`,
+      orderIds
     )
 
-    // 推送任务（assignAndPushOrder 由外部注入）
+    // 支持重打的状态：completed、print_failed、printing、paid
+    // 不能重打的状态：cancelled（已取消）、pending（待支付）
+    const reprintable = orders.filter(o =>
+      ['completed', 'print_failed', 'printing', 'paid'].includes(o.status)
+    )
+    const skipped = orders.filter(o =>
+      ['cancelled', 'pending'].includes(o.status)
+    )
+
+    if (reprintable.length === 0) {
+      return fail(res, 400, '所选订单中没有可重打的订单（待支付、已取消的订单无法重打）')
+    }
+
+    const reprintIds = reprintable.map(o => o.id)
+    const now = shanghaiNow()
+
+    // 重置为 paid 状态（保持 printer_id），等待分配
+    await db.query(
+      `UPDATE orders SET status = 'paid', print_end_time = NULL, updated_at = ? WHERE id IN (${placeholders})`,
+      [now, ...reprintIds]
+    )
+
+    // 推送任务
     let pushedCount = 0
-    for (const order of failedOrders) {
-      const updated = await db.getOne('SELECT * FROM orders WHERE id = ?', [order.id])
-      if (global.assignAndPushOrder) {
-        const pushed = await global.assignAndPushOrder(updated)
-        if (pushed) pushedCount++
+    let failedCount = 0
+    for (const order of reprintable) {
+      try {
+        const updated = await db.getOne('SELECT * FROM orders WHERE id = ?', [order.id])
+        if (global.assignAndPushOrder) {
+          const pushed = await global.assignAndPushOrder(updated)
+          if (pushed) pushedCount++
+          else failedCount++
+        } else {
+          failedCount++
+        }
+      } catch (e) {
+        console.error('[Orders] 重打订单失败:', order.order_no, e.message)
+        failedCount++
       }
     }
 
     const operator = req.admin?.username || 'admin'
-    for (const order of failedOrders) {
+    for (const order of reprintable) {
       await db.query(
         'INSERT INTO points_records (user_id, openid, type, points, reason, order_no, created_at) VALUES (0, ?, "admin_add", 0, ?, ?, ?)',
         [order.openid, `管理员${operator}重打 → ${printer.name}`, order.order_no, now]
@@ -214,20 +252,25 @@ router.post('/batch-reprint', async (req, res) => {
 
     await cache.del('dashboard')
 
-    let msg = `重打完成：成功 ${pushedCount}/${failedOrders.length} 个`
-    if (skippedOrders.length > 0) msg += `，跳过 ${skippedOrders.length} 个（非失败订单）`
+    let msg = `重打完成：推送成功 ${pushedCount} 个`
+    if (failedCount > 0) msg += `，失败 ${failedCount} 个`
+    if (skipped.length > 0) msg += `，跳过 ${skipped.length} 个（待支付/已取消）`
 
     ok(res, {
       total: orders.length,
-      reprinted: failedOrders.length,
+      reprinted: reprintable.length,
       pushed: pushedCount,
-      skipped: skippedOrders.length,
+      failed: failedCount,
+      skipped: skipped.length,
       printerName: printer.name
     }, msg)
+
   } catch (err) {
     console.error('[Orders] Batch reprint error:', err)
     fail(res, 500, '批量重打失败: ' + err.message)
   }
 })
+
+
 
 module.exports = router

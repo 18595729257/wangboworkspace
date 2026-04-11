@@ -2,11 +2,13 @@
 const os = require('os')
 
 module.exports = {
-  // 云端API地址（使用域名+HTTPS）
+  // 云端API地址（优先域名，失败自动降级 IP）
   API_URL: 'https://xinbingcloudprint.top',
+  API_URL_FALLBACK: 'http://39.104.59.201',
 
-  // WebSocket地址（使用域名+WSS）
+  // WebSocket地址（优先域名，失败自动降级 IP）
   WS_URL: 'wss://xinbingcloudprint.top/ws/printer',
+  WS_URL_FALLBACK: 'ws://39.104.59.201/ws/printer',
 
   // 下载目录
   DOWNLOAD_DIR: './downloads',

@@ -43,7 +43,7 @@ createApp({
     const dash = reactive({ revenue: {}, trend: [], statusDist: [], recentOrders: [], userCount: 0, printerStats: {} });
     const orders = reactive({ list: [], total: 0, page: 1, pageSize: 20, totalPages: 0 });
     const ordersFilter = reactive({ status: '', orderType: '', keyword: '', dateFrom: '', dateTo: '', page: 1 });
-    const selectedOrderIds = ref([]); // 当前选中的订单ID（用于批量重打）
+    const selectedOrderIds = ref([]); // 当前选中的订单ID（用于批量重打，支持所有状态）
     const printers = ref([]);
     const entryTypes = ref([]);
     const printerFilter = reactive({ entryType: '', status: '' });
@@ -180,19 +180,19 @@ createApp({
 
     // ===== 批量重打 =====
 
-    // 计算当前页有多少个失败订单
-    const failedOrderCount = computed(() => orders.list.filter(o => o.status === 'print_failed').length);
+    // 计算当前页有多少个可重打的订单（排除已取消和待支付）
+    const failedOrderCount = computed(() => orders.list.filter(o => ['paid', 'printing', 'completed', 'print_failed'].includes(o.status)).length);
 
-    // 当前选中的失败订单ID列表（只保留当前页存在的）
-    const selectedFailedOrders = computed(() => {
-      const failedIds = orders.list.filter(o => o.status === 'print_failed').map(o => o.id);
-      return selectedOrderIds.value.filter(id => failedIds.includes(id));
+    // 当前选中的可重打订单ID列表（支持所有可重打状态）
+    const selectedReprintOrders = computed(() => {
+      const printableIds = orders.list.filter(o => ['paid', 'printing', 'completed', 'print_failed'].includes(o.status)).map(o => o.id);
+      return selectedOrderIds.value.filter(id => printableIds.includes(id));
     });
 
     // 是否全选了
     const allFailedSelected = computed(() => {
       if (failedOrderCount.value === 0) return false;
-      return selectedFailedOrders.value.length === failedOrderCount.value;
+      return selectedReprintOrders.value.length === failedOrderCount.value;
     });
 
     // 切换选中/取消
@@ -202,23 +202,23 @@ createApp({
       else selectedOrderIds.value.push(id);
     }
 
-    // 全选/取消全选（只选失败的）
+    // 全选/取消全选（所有可重打的订单）
     function toggleAllFailed(e) {
       if (e.target.checked) {
-        const failedIds = orders.list.filter(o => o.status === 'print_failed').map(o => o.id);
+        const printableIds = orders.list.filter(o => ['paid', 'printing', 'completed', 'print_failed'].includes(o.status)).map(o => o.id);
         // 合并去重
-        const merged = new Set([...selectedOrderIds.value, ...failedIds]);
+        const merged = new Set([...selectedOrderIds.value, ...printableIds]);
         selectedOrderIds.value = [...merged];
       } else {
-        const failedIds = orders.list.filter(o => o.status === 'print_failed').map(o => o.id);
-        selectedOrderIds.value = selectedOrderIds.value.filter(id => !failedIds.includes(id));
+        const printableIds = orders.list.filter(o => ['paid', 'printing', 'completed', 'print_failed'].includes(o.status)).map(o => o.id);
+        selectedOrderIds.value = selectedOrderIds.value.filter(id => !printableIds.includes(id));
       }
     }
 
-    // 打开批量重打弹窗
+    // 打开批量重打弹窗（支持所有状态订单）
     async function showBatchReprint() {
-      if (selectedFailedOrders.value.length === 0) {
-        showToast('请先勾选失败的订单', 'error');
+      if (selectedReprintOrders.value.length === 0) {
+        showToast('请先勾选要重打的订单', 'error');
         return;
       }
       // 加载打印机列表
@@ -234,7 +234,7 @@ createApp({
       modal.type = 'batchReprint';
       modal.title = '批量重打';
       modal.data = {
-        orderCount: selectedFailedOrders.value.length,
+        orderCount: selectedReprintOrders.value.length,
         availablePrinters: onlinePrinters, // 只显示在线打印机
         selectedPrinter: '',
         totalPrinters: printers.value.length,
@@ -252,7 +252,7 @@ createApp({
       const res = await api('/api/orders/batch-reprint', {
         method: 'POST',
         body: JSON.stringify({
-          orderIds: selectedFailedOrders.value,
+          orderIds: selectedReprintOrders.value,
           printerId: modal.data.selectedPrinter
         })
       });
@@ -452,7 +452,7 @@ createApp({
       users, usersFilter, config, passwordForm, modal, toast,
       selectedPrinterIds, allPrintersSelected,
       togglePrinterSelect, toggleAllPrinters, showBatchPrinterEdit, toggleBatchEntryType, saveBatchPrinterEdit,
-      selectedOrderIds, failedOrderCount, selectedFailedOrders, allFailedSelected,
+      selectedOrderIds, failedOrderCount, selectedReprintOrders, allFailedSelected,
       toggleOrderSelect, toggleAllFailed, showBatchReprint,
       switchView, loadDashboard, loadOrders, exportOrders,
       assignPrinter, completeOrder, changeOrderStatus,

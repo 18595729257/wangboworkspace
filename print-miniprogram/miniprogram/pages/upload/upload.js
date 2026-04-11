@@ -6,10 +6,13 @@ const compat = require('../../utils/compat.js')
 Page({
   data: {
     selectedFile: null,
+    uploadedFileUrl: null,   // 上传后服务端返回的文件URL
+    serverPageCount: null,   // 服务端返回的真实页数
     pageCount: 1,
     copies: 1,
     colorMode: 'bw',
     paperSize: 'A4',
+    duplex: 'single',        // single=单面, double=双面
     printFee: '0.00',
     serviceFee: '0.10',
     totalFee: '0.00',
@@ -25,6 +28,7 @@ Page({
     pointsDiscount: '0.00',
     actualPay: '0.00',
     loading: false,
+    uploading: false,
     showFilePicker: false
   },
 
@@ -92,7 +96,7 @@ Page({
     this.setData({ showFilePicker: false })
   },
 
-  // 设置已选文件
+  // 设置已选文件 —— 选完立即上传获取真实页数
   setSelectedFile: function (file) {
     this.setData({
       selectedFile: {
@@ -101,9 +105,48 @@ Page({
         size: file.size,
         sizeText: (file.size / 1024).toFixed(1) + ' KB'
       },
-      showFilePicker: false
+      showFilePicker: false,
+      uploadedFileUrl: null,
+      serverPageCount: null
     })
-    this.estimatePageCount(file.name)
+    // 图片固定1页，不需要上传获取
+    var ext = (file.name || '').split('.').pop().toLowerCase()
+    if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].includes(ext)) {
+      this.setData({ pageCount: 1, serverPageCount: 1 })
+      this.calculatePrice()
+    } else {
+      // 文档类：立即上传获取真实页数
+      this.uploadForPageCount(file)
+    }
+  },
+
+  // 上传文件获取真实页数（选文件后自动触发）
+  uploadForPageCount: function (file) {
+    var self = this
+    this.setData({ uploading: true })
+    wx.showLoading({ title: '解析页数中...', mask: true })
+
+    api.uploadFile(file.path, file.name).then(function (uploadRes) {
+      wx.hideLoading()
+      var fileUrl = uploadRes.data.url
+      var pageCount = uploadRes.data.pageCount || 1
+
+      self.setData({
+        uploadedFileUrl: fileUrl,
+        serverPageCount: pageCount,
+        pageCount: pageCount,
+        uploading: false
+      })
+      self.calculatePrice()
+
+      wx.showToast({ title: pageCount + '页', icon: 'success' })
+    }).catch(function () {
+      wx.hideLoading()
+      // 上传失败，用默认1页，用户可手动改
+      self.setData({ uploading: false, pageCount: 1 })
+      self.calculatePrice()
+      wx.showToast({ title: '页数解析失败，请手动输入', icon: 'none' })
+    })
   },
 
   // 选择本地文件
@@ -141,16 +184,6 @@ Page({
     })
   },
 
-  estimatePageCount: function (fileName) {
-    const ext = fileName.split('.').pop().toLowerCase()
-    let pageCount = 1
-    // 图片固定1页，其他格式让用户手动输入
-    if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].includes(ext)) pageCount = 1
-    else pageCount = 1 // PDF/Word等由服务端上传后返回真实页数，这里先设1
-    this.setData({ pageCount })
-    this.calculatePrice()
-  },
-
   setPageCount: function (e) {
     this.setData({ pageCount: Math.max(1, parseInt(e.detail.value) || 1) })
     this.calculatePrice()
@@ -168,12 +201,20 @@ Page({
 
   setPaperSize: function (e) {
     this.setData({ paperSize: e.currentTarget.dataset.size })
+    this.calculatePrice()
+  },
+
+  setDuplex: function (e) {
+    this.setData({ duplex: e.currentTarget.dataset.duplex })
+    this.calculatePrice()
   },
 
   calculatePrice: function () {
     var d = this.data
     var pricePerPage = d.colorMode === 'color' ? d.priceColor : d.priceBw
-    var printFee = d.pageCount * d.copies * pricePerPage
+    // 双面打印：每2页算1张纸的价格，不足2页按1张算
+    var sheets = d.duplex === 'double' ? Math.ceil(d.pageCount / 2) : d.pageCount
+    var printFee = sheets * d.copies * pricePerPage
     var serviceFee = d.serviceFeeVal
     var pointsDiscount = 0
     if (d.usePoints && d.pointsToUse > 0) {
@@ -211,70 +252,93 @@ Page({
   },
 
   removeFile: function () {
-    this.setData({ selectedFile: null, pageCount: 1 })
+    this.setData({ selectedFile: null, uploadedFileUrl: null, serverPageCount: null, pageCount: 1 })
     this.calculatePrice()
   },
 
   // 创建订单并支付
   createOrderAndPay: function () {
     const self = this
-    const { selectedFile, pageCount, copies, colorMode, paperSize, pointsToUse, usePoints } = this.data
+    const { selectedFile, pageCount, copies, colorMode, paperSize, duplex, pointsToUse, usePoints, uploadedFileUrl } = this.data
 
     if (!selectedFile) {
       wx.showToast({ title: '请先选择文件', icon: 'none' })
       return
     }
 
-    // 没有openid用匿名标识，不阻断下单
-    var openid = app.globalData.openid || ('anon_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6))
+    if (this.data.uploading) {
+      wx.showToast({ title: '文件解析中，请稍候', icon: 'none' })
+      return
+    }
+
+    // 【升级v2】获取订单归属标识（账号优先，游客用deviceId）
+    var identity = app.getOrderIdentity()
+    var openid = identity.openid
+    var deviceId = identity.deviceId
+
+    // 无账号无设备ID时兜底（极少见）
+    if (!openid && !deviceId) {
+      wx.showToast({ title: '无法下单，请重试', icon: 'none' })
+      return
+    }
 
     this.setData({ loading: true })
-    wx.showLoading({ title: '上传文件中...', mask: true })
 
-    // 第一步：上传文件到服务器
-    api.uploadFile(selectedFile.path, selectedFile.name).then(function (uploadRes) {
-      var fileUrl = uploadRes.data.url
-      // 使用服务端返回的真实页数
-      if (uploadRes.data.pageCount && uploadRes.data.pageCount > 0) {
-        self.setData({ pageCount: uploadRes.data.pageCount })
-        self.calculatePrice()
-      }
-
+    // 如果已经上传过（获取页数时上传的），直接用已有URL
+    if (uploadedFileUrl) {
       wx.showLoading({ title: '创建订单...', mask: true })
-
-      // 第二步：创建订单（带上文件URL）
-      return api.createOrder({
-        openid: openid,
-        fileName: selectedFile.name,
-        fileUrl: fileUrl,
-        pageCount: pageCount,
-        copies: copies,
-        colorMode: colorMode,
-        paperSize: paperSize,
-        pointsUsed: usePoints ? pointsToUse : 0
+      self.doCreateOrder(openid, deviceId, uploadedFileUrl, selectedFile.name, pageCount, copies, colorMode, paperSize, duplex, pointsToUse, usePoints)
+    } else {
+      // 图片等未提前上传的情况
+      wx.showLoading({ title: '上传文件中...', mask: true })
+      api.uploadFile(selectedFile.path, selectedFile.name).then(function (uploadRes) {
+        var fileUrl = uploadRes.data.url
+        var realPageCount = uploadRes.data.pageCount || pageCount
+        if (realPageCount > 0) {
+          self.setData({ pageCount: realPageCount })
+        }
+        wx.showLoading({ title: '创建订单...', mask: true })
+        self.doCreateOrder(openid, deviceId, fileUrl, selectedFile.name, realPageCount, copies, colorMode, paperSize, duplex, pointsToUse, usePoints)
+      }).catch(function (err) {
+        wx.hideLoading()
+        wx.showToast({ title: err.msg || '上传失败', icon: 'none' })
+        self.setData({ loading: false })
       })
+    }
+  },
+
+  doCreateOrder: function (openid, deviceId, fileUrl, fileName, pageCount, copies, colorMode, paperSize, duplex, pointsToUse, usePoints) {
+    var self = this
+    api.createOrder({
+      openid: openid || null,
+      deviceId: deviceId || null,
+      fileName: fileName,
+      fileUrl: fileUrl,
+      pageCount: pageCount,
+      copies: copies,
+      colorMode: colorMode,
+      paperSize: paperSize,
+      duplex: duplex,
+      pointsUsed: (usePoints && openid) ? pointsToUse : 0
     }).then(function (res) {
       wx.hideLoading()
       if (res.code === 200) {
         const orderNo = res.data.orderNo
-
-        // 模拟支付成功（正式环境对接微信支付）
         api.payCallback(orderNo).then(function () {
           wx.showToast({ title: '下单成功', icon: 'success' })
           setTimeout(function () {
             wx.redirectTo({
-              url: `/pages/order-detail/order-detail?orderNo=${orderNo}`
+              url: '/pages/order-detail/order-detail?orderNo=' + orderNo
             })
           }, 1500)
         })
-
         app.refreshPoints()
       } else {
         wx.showToast({ title: res.msg || '创建订单失败', icon: 'none' })
       }
     }).catch(function (err) {
       wx.hideLoading()
-      wx.showToast({ title: err.msg || '上传失败', icon: 'none' })
+      wx.showToast({ title: err.msg || '创建订单失败', icon: 'none' })
     }).finally(function () {
       self.setData({ loading: false })
     })

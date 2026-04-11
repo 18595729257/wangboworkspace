@@ -1,16 +1,26 @@
-// download.js - 改进的下载函数，带详细日志，支持域名被拦截时降级到 IP 直连
+// download.js - 文件下载，优先域名，失败自动降级 IP
 const https = require('https')
 const http = require('http')
 const fs = require('fs')
 const path = require('path')
 
-const CORRECT_DOMAIN = 'xinbingcloudprint.top'
-const SERVER_IP = '39.104.59.201'
+const DOMAIN_HOST = 'xinbingcloudprint.top'
+const IP_HOST = '39.104.59.201'
 
 function downloadFile(url, destPath) {
   return new Promise((resolve, reject) => {
-    // 优先使用域名，如果域名被拦截（返回 HTML），降级到 IP 直连
-    const tryDownload = (downloadUrl) => {
+    // 处理相对路径：自动拼接 API_URL 前缀
+    const config = require('./config')
+    if (url.startsWith('/')) {
+      url = config.API_URL.replace(/\/$/, '') + url
+    }
+
+    // 关键：HTTP 域名升级为 HTTPS（阿里云 ICP 拦截 HTTP，HTTPS 正常）
+    if (url.startsWith('http://' + DOMAIN_HOST)) {
+      url = url.replace('http://' + DOMAIN_HOST, 'https://' + DOMAIN_HOST)
+    }
+
+    const tryDownload = (downloadUrl, isRetry) => {
       const protocol = downloadUrl.startsWith('https') ? https : http
 
       console.log(`[下载] URL: ${downloadUrl}`)
@@ -18,7 +28,6 @@ function downloadFile(url, destPath) {
       protocol.get(downloadUrl, { timeout: 30000, rejectUnauthorized: false }, (res) => {
         console.log(`[下载] 响应状态: ${res.statusCode}`)
         console.log(`[下载] Content-Type: ${res.headers['content-type']}`)
-        console.log(`[下载] Content-Length: ${res.headers['content-length']}`)
 
         // 跟踪重定向
         if (res.statusCode === 301 || res.statusCode === 302) {
@@ -27,24 +36,34 @@ function downloadFile(url, destPath) {
           return downloadFile(redirectUrl, destPath).then(resolve).catch(reject)
         }
 
+        // 域名返回 403 (ICP 拦截) 或非200，降级到 IP
         if (res.statusCode !== 200) {
+          if (!isRetry && downloadUrl.includes(DOMAIN_HOST)) {
+            console.log(`[下载] 域名返回 ${res.statusCode}，降级到 IP...`)
+            res.resume()
+            const ipUrl = downloadUrl
+              .replace(`https://${DOMAIN_HOST}`, `http://${IP_HOST}`)
+              .replace(`http://${DOMAIN_HOST}`, `http://${IP_HOST}`)
+            return tryDownload(ipUrl, true)
+          }
           let errorBody = ''
           res.on('data', chunk => errorBody += chunk)
           res.on('end', () => {
-            console.error(`[下载] 错误响应: ${errorBody}`)
+            console.error(`[下载] 错误响应: ${errorBody.substring(0, 200)}`)
             reject(new Error(`Download failed: ${res.statusCode}`))
           })
           return
         }
 
-        // 检查 Content-Type，如果是 HTML 说明被 ICP 拦截，直接降级到 IP
+        // 检查 Content-Type，HTML 说明被 ICP 拦截，降级到 IP
         const contentType = res.headers['content-type'] || ''
-        if (contentType.includes('text/html')) {
-          console.error('[下载] ⚠️ 检测到 HTML 响应（Content-Type: text/html），域名被拦截，降级到 IP 直连...')
-          // 降级：使用 IP 直接下载（不检查内容，只要是 HTML 就降级）
-          const ipUrl = url.replace(`https://${CORRECT_DOMAIN}`, `https://${SERVER_IP}`)
-            .replace(`http://${CORRECT_DOMAIN}`, `https://${SERVER_IP}`)
-          return tryDownload(ipUrl)
+        if (contentType.includes('text/html') && !isRetry && downloadUrl.includes(DOMAIN_HOST)) {
+          console.log('[下载] 检测到 HTML（ICP 拦截），降级到 IP...')
+          res.resume()
+          const ipUrl = downloadUrl
+            .replace(`https://${DOMAIN_HOST}`, `http://${IP_HOST}`)
+            .replace(`http://${DOMAIN_HOST}`, `http://${IP_HOST}`)
+          return tryDownload(ipUrl, true)
         }
 
         const file = fs.createWriteStream(destPath)
@@ -62,13 +81,11 @@ function downloadFile(url, destPath) {
         file.on('finish', () => {
           const stats = fs.statSync(destPath)
           console.log(`[下载] 完成: ${stats.size} 字节`)
-          console.log(`[下载] 文件: ${destPath}`)
 
-          // 检查下载的文件内容
           if (stats.size < 1000) {
             const content = fs.readFileSync(destPath, 'utf8')
-            console.error(`[下载] ⚠️ 文件过小，内容: ${content.substring(0, 200)}`)
-            fs.unlinkSync(destPath) // 删除无效文件
+            console.error(`[下载] 文件过小，内容: ${content.substring(0, 200)}`)
+            fs.unlinkSync(destPath)
             reject(new Error(`文件过小 (${stats.size} 字节)`))
           } else {
             resolve(stats.size)
@@ -82,16 +99,20 @@ function downloadFile(url, destPath) {
         })
       }).on('error', (err) => {
         console.error('[下载] 网络错误:', err.message)
+        // 域名连接失败（RST/超时），降级到 IP
+        if (!isRetry && downloadUrl.includes(DOMAIN_HOST)) {
+          const ipUrl = downloadUrl
+            .replace(`https://${DOMAIN_HOST}`, `http://${IP_HOST}`)
+            .replace(`http://${DOMAIN_HOST}`, `http://${IP_HOST}`)
+          console.log(`[下载] 域名连接失败，降级到 IP: ${ipUrl}`)
+          return tryDownload(ipUrl, true)
+        }
         reject(err)
       })
     }
 
-    // 优先使用域名，IP 用于降级
-    const safeUrl = url
-      .replace('39.104.59.201', CORRECT_DOMAIN)
-      .replace('xinbingprint.top', CORRECT_DOMAIN)
-    
-    tryDownload(safeUrl)
+    // 优先用域名，失败自动降级 IP
+    tryDownload(url, false)
   })
 }
 

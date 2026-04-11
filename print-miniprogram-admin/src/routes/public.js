@@ -1,4 +1,5 @@
-// src/routes/public.js - 小程序公开接口
+// src/routes/public.js - 小程序公开接口（升级版：支持多文件 + 封面生成）
+require('dotenv').config()
 const express = require('express')
 const rateLimit = require('express-rate-limit')
 const path = require('path')
@@ -11,6 +12,10 @@ const { ok, fail, safeFileName, detectPdfPages, normalizeHost, shanghaiNow,
 
 const router = express.Router()
 
+// ===== 文件上传目录 =====
+const uploadDir = path.join(__dirname, '../../uploads')
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true })
+
 // ===== 公开接口限流 =====
 const publicLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -20,9 +25,52 @@ const publicLimiter = rateLimit({
 })
 router.use(publicLimiter)
 
-// ===== 文件上传目录 =====
-const uploadDir = path.join(__dirname, '../../uploads')
-if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true })
+// ===== 辅助函数：解析 multipart body =====
+function indexOf(buf, subbuf, start = 0) {
+  for (let i = start; i <= buf.length - subbuf.length; i++) {
+    let match = true
+    for (let j = 0; j < subbuf.length; j++) {
+      if (buf[i + j] !== subbuf[j]) { match = false; break }
+    }
+    if (match) return i
+  }
+  return -1
+}
+
+function parseMultipart(buf, boundary) {
+  const boundaryBuf = Buffer.from('--' + boundary)
+  let boundaries = []
+  let pos = 0
+  while (true) {
+    pos = indexOf(buf, boundaryBuf, pos)
+    if (pos === -1) break
+    boundaries.push(pos)
+    pos += boundaryBuf.length
+  }
+  if (boundaries.length < 3) return null
+
+  for (let i = 0; i < boundaries.length - 1; i++) {
+    let dataStart = boundaries[i] + boundaryBuf.length
+    if (buf[dataStart] === 0x0D && buf[dataStart + 1] === 0x0A) dataStart += 2
+
+    const contentArea = buf.slice(dataStart, boundaries[i + 1])
+    const headerEnd = indexOf(contentArea, Buffer.from('\r\n\r\n'), 0)
+    if (headerEnd === -1) continue
+
+    const headerStr = contentArea.slice(0, headerEnd).toString('utf8')
+    const bodyStart = headerEnd + 4
+    let bodyEnd = contentArea.length
+    if (contentArea[contentArea.length - 2] === 0x0D) bodyEnd -= 2
+    if (contentArea[contentArea.length - 1] === 0x0A) bodyEnd -= 1
+    const body = contentArea.slice(bodyStart, bodyEnd)
+
+    if (headerStr.includes('name="file"')) {
+      const filenameMatch = headerStr.match(/filename="([^"]+)"/i)
+      return { filename: filenameMatch?.[1] || 'upload.bin', data: body }
+    }
+  }
+  return null
+}
 
 // ===== GET /api/public/config =====
 router.get('/config', async (req, res) => {
@@ -46,7 +94,7 @@ router.post('/wx-login', async (req, res) => {
     const appid = process.env.WX_APPID || 'wx749cd8c41284e88f'
     const appsecret = process.env.WX_APPSECRET || ''
 
-    let openid = ''
+    let openid = `temp_${code.substring(0, 20)}_${Date.now()}`
 
     if (appsecret) {
       try {
@@ -59,12 +107,8 @@ router.post('/wx-login', async (req, res) => {
             r.on('end', () => resolve(JSON.parse(data)))
           }).on('error', reject)
         })
-        openid = wxRes.openid || `temp_${code.substring(0, 20)}_${Date.now()}`
-      } catch {
-        openid = `temp_${code.substring(0, 20)}_${Date.now()}`
-      }
-    } else {
-      openid = `temp_${code.substring(0, 20)}_${Date.now()}`
+        openid = wxRes.openid || openid
+      } catch {}
     }
 
     await db.query('INSERT IGNORE INTO users (openid, created_at, updated_at) VALUES (?, NOW(), NOW())', [openid])
@@ -73,55 +117,6 @@ router.post('/wx-login', async (req, res) => {
   } catch (err) {
     console.error('[Public] Wx login error:', err)
     fail(res, 500, '登录失败')
-  }
-})
-
-// ===== POST /api/public/phone =====
-router.post('/phone', async (req, res) => {
-  try {
-    const { code } = req.body
-    if (!code) return fail(res, 400, '缺少code')
-
-    const appid = process.env.WX_APPID || 'wx749cd8c41284e88f'
-    const appsecret = process.env.WX_APPSECRET || ''
-    if (!appsecret) return ok(res, { phoneNumber: '' })
-
-    const https = require('https')
-
-    const tokenRes = await new Promise((resolve, reject) => {
-      https.get(
-        `https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid=${appid}&secret=${appsecret}`,
-        r => {
-          let data = ''
-          r.on('data', c => data += c)
-          r.on('end', () => resolve(JSON.parse(data)))
-        }
-      ).on('error', reject)
-    })
-
-    if (!tokenRes.access_token) return ok(res, { phoneNumber: '' })
-
-    const postData = JSON.stringify({ code })
-    const phoneRes = await new Promise((resolve, reject) => {
-      const req2 = https.request(
-        `https://api.weixin.qq.com/wxa/business/getuserphonenumber?access_token=${tokenRes.access_token}`,
-        { method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) } },
-        r => {
-          let data = ''
-          r.on('data', c => data += c)
-          r.on('end', () => resolve(JSON.parse(data)))
-        }
-      )
-      req2.on('error', reject)
-      req2.write(postData)
-      req2.end()
-    })
-
-    const phoneNumber = phoneRes.phone_info?.phoneNumber || ''
-    ok(res, { phoneNumber })
-  } catch (err) {
-    console.error('[Public] Get phone error:', err)
-    ok(res, { phoneNumber: '' })
   }
 })
 
@@ -138,16 +133,35 @@ router.get('/queue-status', async (req, res) => {
   ok(res, { printers: p, queue: q })
 })
 
-// ===== POST /api/public/order =====
+// ===== 【升级v2】POST /api/public/order =====
+// 支持 device_id（游客模式）or openid（账号模式），两者都不为空时优先 openid
 router.post('/order', async (req, res) => {
   try {
     const {
-      openid, fileName, fileUrl = '', pageCount, copies,
-      colorMode, paperSize, pointsUsed = 0, orderType = 'print',
-      extraInfo = '', printTag = ''
+      openid, deviceId, files: filesJson = '[]', pageCount = 1, copies = 1,
+      colorMode = 'bw', paperSize = 'A4', duplex = 'single',
+      pointsUsed = 0, orderType = 'print', extraInfo = '', printTag = ''
     } = req.body
 
-    if (!openid || !fileName) return fail(res, 400, '参数不完整')
+    // 解析多文件 JSON
+    let files = []
+    try {
+      files = typeof filesJson === 'string' ? JSON.parse(filesJson) : filesJson
+    } catch { files = [] }
+
+    // 兼容旧版：单文件参数
+    if (files.length === 0) {
+      const { fileName = '', fileUrl = '' } = req.body
+      if (fileName && fileUrl) {
+        files = [{ name: fileName, url: fileUrl, pageCount: parseInt(pageCount) || 1 }]
+      }
+    }
+
+    // 必须至少有一个标识（openid 优先，deviceId 次之）
+    const effectiveOpenid = openid || null
+    const effectiveDeviceId = deviceId || null
+    if (!effectiveOpenid && !effectiveDeviceId) return fail(res, 400, '参数不完整（缺少 openid 或 deviceId）')
+    if (files.length === 0) return fail(res, 400, '参数不完整（缺少文件）')
 
     const config = await getConfig()
     if (config.enable_print !== '1') return fail(res, 400, '打印服务暂未开放')
@@ -160,8 +174,16 @@ router.post('/order', async (req, res) => {
       else tag = 'normal'
     }
 
+    // 计算总页数（双面打印：2页合1张纸，但总页数不变，只影响价格）
+    let totalPages = 0
+    for (const f of files) {
+      totalPages += parseInt(f.pageCount || 1)
+    }
+
     const pricePerPage = colorMode === 'color' ? parseFloat(config.price_color) : parseFloat(config.price_bw)
-    const printFee = pageCount * copies * pricePerPage
+    // 双面：每2页算1张纸，不足2页按1张
+    const sheets = duplex === 'double' ? Math.ceil(totalPages / 2) : totalPages
+    const printFee = sheets * copies * pricePerPage
     const serviceFee = parseFloat(config.service_fee)
     const totalFee = printFee + serviceFee
     const maxDiscount = Math.min(parseFloat(config.max_points_discount), printFee)
@@ -184,19 +206,49 @@ router.post('/order', async (req, res) => {
         }
       }
 
+      const mainFile = files[0]
+      const filesJsonStr = JSON.stringify(files)
+
+      // 存储用：openid 为账号标识，deviceId 为游客设备标识
+      const storedOpenid = effectiveOpenid || `guest_${effectiveDeviceId}`
+      // 【升级v2】INSERT 必须包含所有列（除 auto_increment id），顺序严格对应数据库表
+      // 漏列会导致值错位到其他列，decimal/status 互串就是根因
       await conn.query(
-        `INSERT INTO orders (order_no, openid, file_name, file_url, page_count, copies, color_mode, paper_size,
-          print_fee, service_fee, total_fee, points_used, points_discount, actual_pay, status, order_type, print_tag, extra_info, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, NOW())`,
-        [orderNo, openid, fileName, fileUrl, pageCount, copies, colorMode, paperSize,
+        `INSERT INTO orders (order_no, openid, device_id, file_name, file_url, files,
+          order_seq, print_seq, doc_seq_date,
+          page_count, copies, color_mode, paper_size, duplex,
+          print_fee, service_fee, total_fee, points_used, points_discount, actual_pay,
+          status, order_type, print_tag, extra_info, printer_id, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, NULL, NOW())`,
+        [orderNo, storedOpenid, effectiveDeviceId,
+          mainFile.name, mainFile.url, filesJsonStr,
+          totalPages, copies, colorMode, paperSize, duplex,
           parseFloat(printFee.toFixed(2)), serviceFee, parseFloat(totalFee.toFixed(2)),
           pointsUsed, parseFloat(pointsDiscount.toFixed(2)), parseFloat(actualPay.toFixed(2)),
           orderType, tag, extraInfo]
       )
     })
 
+    // 处理多文件：生成封面（仅文档类打印），同步写 print_seq
+    const { processOrderFiles } = require('../services/cover')
+    let coverInfo = {}
+    try {
+      coverInfo = await processOrderFiles(orderNo, files, { copies, colorMode, paperSize })
+    } catch (err) {
+      console.error('[Public] 处理文件封面失败:', err.message)
+    }
+
     await cache.del('dashboard')
-    ok(res, { orderNo, actualPay: parseFloat(actualPay.toFixed(2)) })
+
+    ok(res, {
+      orderNo,
+      actualPay: parseFloat(actualPay.toFixed(2)),
+      totalPages,
+      filesCount: files.length,
+      hasCover: coverInfo.needsCover || false,
+      printSeq: coverInfo.coverSeq || null,   // 取单号（展示用，如0001）
+      orderType,
+    })
   } catch (err) {
     console.error('[Public] Create order error:', err)
     fail(res, 500, '创建订单失败')
@@ -204,9 +256,17 @@ router.post('/order', async (req, res) => {
 })
 
 // ===== GET /api/public/order/:orderNo =====
+// 【升级v2】返回 print_seq（取单号）、isDocOrder 判断
 router.get('/order/:orderNo', async (req, res) => {
   const order = await db.getOne('SELECT * FROM orders WHERE order_no = ?', [req.params.orderNo])
   if (!order) return fail(res, 404, '订单不存在')
+  if (order.files) order.files = typeof order.files === 'string' ? JSON.parse(order.files) : order.files
+  // 取单号格式化（0001）
+  if (order.order_seq) {
+    order.printSeq = String(order.order_seq).padStart(4, '0')
+  }
+  // 是否文档类订单（有封面）
+  order.isDocOrder = !!(order.order_seq && order.doc_seq_date)
   ok(res, order)
 })
 
@@ -239,7 +299,7 @@ router.put('/order/:orderNo/cancel', async (req, res) => {
   }
 })
 
-// ===== POST /api/public/pay-callback =====
+// ===== 【升级3】POST /api/public/pay-callback（触发封面打印）=====
 router.post('/pay-callback', async (req, res) => {
   try {
     const { orderNo } = req.body
@@ -251,11 +311,10 @@ router.post('/pay-callback', async (req, res) => {
 
     const now = shanghaiNow()
 
-    // 更新支付时间，订单保持 'paid' 状态，直到客户端真正收到任务才改成 printing
+    // 更新支付时间，订单保持 paid 状态，等待分配
     await db.query('UPDATE orders SET status = ?, pay_time = ? WHERE id = ?', ['paid', now, order.id])
 
-    // 推送打印任务（由外部注入）
-    // assignAndPushOrder 会更新订单状态为 printing 并分配打印机
+    // 推送打印任务
     let pushed = false
     if (global.assignAndPushOrder) {
       try {
@@ -295,8 +354,8 @@ router.post('/pay-callback', async (req, res) => {
     fail(res, 500, '处理失败')
   }
 })
-// ===== GET /api/public/user/:openid =====
 
+// ===== GET /api/public/user/:openid =====
 router.get('/user/:openid', async (req, res) => {
   let user = await db.getOne('SELECT * FROM users WHERE openid = ?', [req.params.openid])
   if (!user) {
@@ -306,7 +365,74 @@ router.get('/user/:openid', async (req, res) => {
   ok(res, user)
 })
 
+// ===== GET /api/public/orders/me =====
+// 【升级v2】智能订单查询：同时支持 openid（账号） + deviceId（游客）
+// 规则：
+//   - 有 openid → 查账号订单（精确匹配 openid，排除 guest_ 前缀）
+//   - 有 deviceId 无 openid → 查游客订单（精确匹配 device_id）
+//   - 两者都没有 → 返回空列表
+router.get('/orders/me', async (req, res) => {
+  try {
+    const { page = 1, pageSize = 20, openid, deviceId } = req.query
+    const offset = (parseInt(page) - 1) * parseInt(pageSize)
+    const limit = parseInt(pageSize)
+
+    let conditions = []
+    let params = []
+
+    // 账号模式：有 openid
+    if (openid) {
+      conditions.push('openid = ?')
+      params.push(openid)
+    }
+    // 游客模式：无 openid，有 deviceId
+    else if (deviceId) {
+      conditions.push('device_id = ?')
+      params.push(deviceId)
+    }
+    // 两者都没有，返回空
+    else {
+      return ok(res, { list: [], total: 0, page: parseInt(page), pageSize: parseInt(pageSize), mode: 'empty' })
+    }
+
+    const where = 'WHERE ' + conditions.join(' AND ')
+    const [totalRow, orders] = await Promise.all([
+      db.getOne(`SELECT COUNT(*) as c FROM orders ${where}`, params),
+      db.getPool().query(
+        `SELECT * FROM orders ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+        [...params, limit, offset]
+      ).then(([rows]) => rows),
+    ])
+
+    // 解析 files JSON，补全 printSeq
+    const ordersWithFiles = orders.map(o => {
+      const parsed = {
+        ...o,
+        files: o.files ? (typeof o.files === 'string' ? JSON.parse(o.files) : o.files) : null,
+      }
+      // 取单号格式化
+      if (parsed.order_seq) {
+        parsed.printSeq = String(parsed.order_seq).padStart(4, '0')
+      }
+      // 是否文档类订单
+      parsed.isDocOrder = !!(parsed.order_seq && parsed.doc_seq_date)
+      return parsed
+    })
+
+    ok(res, {
+      list: ordersWithFiles,
+      total: totalRow.c,
+      page: parseInt(page),
+      pageSize: parseInt(pageSize),
+    })
+  } catch (err) {
+    console.error('[Public] /orders/me error:', err)
+    fail(res, 500, '查询失败')
+  }
+})
+
 // ===== GET /api/public/user/:openid/orders =====
+// 【升级v2】兼容旧版路径：仍然按 openid 精确查询（仅账号模式）
 router.get('/user/:openid/orders', async (req, res) => {
   const { page = 1, pageSize = 20 } = req.query
   const offset = (parseInt(page) - 1) * parseInt(pageSize)
@@ -320,7 +446,19 @@ router.get('/user/:openid/orders', async (req, res) => {
     ).then(([rows]) => rows),
   ])
 
-  ok(res, { list: orders, total: totalRow.c, page: parseInt(page), pageSize: parseInt(pageSize) })
+  const ordersWithFiles = orders.map(o => {
+    const parsed = {
+      ...o,
+      files: o.files ? (typeof o.files === 'string' ? JSON.parse(o.files) : o.files) : null,
+    }
+    if (parsed.order_seq) {
+      parsed.printSeq = String(parsed.order_seq).padStart(4, '0')
+    }
+    parsed.isDocOrder = !!(parsed.order_seq && parsed.doc_seq_date)
+    return parsed
+  })
+
+  ok(res, { list: ordersWithFiles, total: totalRow.c, page: parseInt(page), pageSize: parseInt(pageSize) })
 })
 
 // ===== 打印机客户端接口 =====
@@ -355,7 +493,9 @@ router.post('/printer/register', async (req, res) => {
       [clientId]
     )
 
-    ok(res, null, '注册成功')
+    // 返回该客户端所有打印机的 enabled 状态
+    const printers = await db.query('SELECT name, enabled FROM printers WHERE client_id = ?', [clientId])
+    ok(res, { printers }, '注册成功')
   } catch (err) {
     console.error('[Public] 打印机注册失败:', err)
     fail(res, 500, '注册失败')
@@ -368,7 +508,9 @@ router.post('/printer/heartbeat', async (req, res) => {
     const { clientId } = req.body
     if (!clientId) return fail(res, 400, '缺少clientId')
     await db.query('UPDATE printers SET last_heartbeat = NOW(), updated_at = NOW() WHERE client_id = ?', [clientId])
-    ok(res, null, 'ok')
+    // 返回最新的 enabled 状态，让客户端同步
+    const printers = await db.query('SELECT name, enabled FROM printers WHERE client_id = ?', [clientId])
+    ok(res, { printers }, 'ok')
   } catch (err) {
     fail(res, 500, '心跳失败')
   }
@@ -377,10 +519,29 @@ router.post('/printer/heartbeat', async (req, res) => {
 // GET /api/public/printer/pending
 router.get('/printer/pending', async (req, res) => {
   try {
-    const orders = await db.query(
-      "SELECT * FROM orders WHERE status = 'paid' AND (file_url IS NOT NULL AND file_url != '') ORDER BY created_at ASC LIMIT 10"
-    )
-    ok(res, orders)
+    const { clientId } = req.query
+    let query = "SELECT * FROM orders WHERE status = 'paid' AND (file_url IS NOT NULL AND file_url != '') ORDER BY created_at ASC LIMIT 20"
+    let params = []
+
+    // 如果有 clientId，优先返回该客户端打印机的订单
+    if (clientId) {
+      const ids = (await db.query('SELECT id FROM printers WHERE client_id = ?', [clientId])).map(r => r.id)
+      if (ids.length > 0) {
+        query = `SELECT * FROM orders WHERE status = 'paid' AND (file_url IS NOT NULL AND file_url != '') AND (printer_id IS NULL OR printer_id IN (?)) ORDER BY created_at ASC LIMIT 20`
+        params = [ids]
+      }
+    }
+
+    const orders = await db.query(query, params)
+
+    // 解析 files JSON，组装完整打印文件列表（封面 + 原文件）
+    const { getOrderPrintFiles } = require('../services/cover')
+    const ordersWithFiles = await Promise.all(orders.map(async (o) => {
+      const files = await getOrderPrintFiles(o)
+      return { ...o, printFiles: files }
+    }))
+
+    ok(res, ordersWithFiles)
   } catch (err) {
     console.error('[Public] 获取待打印订单失败:', err)
     fail(res, 500, '获取失败')
@@ -399,76 +560,31 @@ router.put('/order/:orderNo/print-status', async (req, res) => {
     const validStatuses = ['printing', 'printed', 'completed', 'print_failed']
     if (!validStatuses.includes(status)) return fail(res, 400, '无效的状态')
 
-    let sql, params
+    let completedOrder = null
     if (status === 'completed' || status === 'printed') {
-      sql = "UPDATE orders SET status = 'completed', print_end_time = NOW(), updated_at = NOW() WHERE order_no = ?"
-      params = [orderNo]
+      await db.query("UPDATE orders SET status = 'completed', print_end_time = NOW(), updated_at = NOW() WHERE order_no = ?", [orderNo])
+      // 查询完整订单信息（含 printSeq）返回给客户端
+      completedOrder = await db.getOne('SELECT order_seq, doc_seq_date FROM orders WHERE order_no = ?', [orderNo])
     } else if (status === 'print_failed') {
-      sql = "UPDATE orders SET status = 'print_failed', updated_at = NOW() WHERE order_no = ?"
-      params = [orderNo]
+      await db.query("UPDATE orders SET status = 'print_failed', updated_at = NOW() WHERE order_no = ?", [orderNo])
     } else {
-      sql = 'UPDATE orders SET status = ?, updated_at = NOW() WHERE order_no = ?'
-      params = [status, orderNo]
+      await db.query('UPDATE orders SET status = ?, updated_at = NOW() WHERE order_no = ?', [status, orderNo])
     }
 
-    await db.query(sql, params)
     console.log(`[打印] 订单 ${orderNo} 状态更新: ${status}${clientId ? ' (客户端: ' + clientId + ')' : ''}${printError ? ' 错误: ' + printError : ''}`)
-    ok(res, null, '更新成功')
+    ok(res, {
+      orderNo,
+      printSeq: completedOrder?.order_seq ? String(completedOrder.order_seq).padStart(4, '0') : null,
+      isDocOrder: !!(completedOrder?.order_seq && completedOrder?.doc_seq_date),
+    }, '更新成功')
   } catch (err) {
     console.error('[Public] 更新打印状态失败:', err)
     fail(res, 500, '更新失败')
   }
 })
 
-// ===== 文件上传（手动 multipart 解析）=====
-
-// 在 Buffer 中查找子 Buffer
-function indexOf(buf, subbuf, start = 0) {
-  for (let i = start; i <= buf.length - subbuf.length; i++) {
-    let match = true
-    for (let j = 0; j < subbuf.length; j++) {
-      if (buf[i + j] !== subbuf[j]) { match = false; break }
-    }
-    if (match) return i
-  }
-  return -1
-}
-
-// 解析 multipart body
-function parseMultipart(buf, boundary) {
-  const boundaryBuf = Buffer.from('--' + boundary)
-  let boundaries = []
-  let pos = 0
-  while (true) {
-    pos = indexOf(buf, boundaryBuf, pos)
-    if (pos === -1) break
-    boundaries.push(pos)
-    pos += boundaryBuf.length
-  }
-  if (boundaries.length < 3) return null
-
-  for (let i = 0; i < boundaries.length - 1; i++) {
-    let dataStart = boundaries[i] + boundaryBuf.length
-    if (buf[dataStart] === 0x0D && buf[dataStart + 1] === 0x0A) dataStart += 2
-
-    const contentArea = buf.slice(dataStart, boundaries[i + 1])
-    const headerEnd = indexOf(contentArea, Buffer.from('\r\n\r\n'), 0)
-    if (headerEnd === -1) continue
-
-    const headerStr = contentArea.slice(0, headerEnd).toString('utf8')
-    const bodyStart = headerEnd + 4
-    const bodyEnd = contentArea.length - (contentArea[contentArea.length - 2] === 0x0D ? 2 : 0)
-    const body = contentArea.slice(bodyStart, bodyEnd)
-
-    if (headerStr.includes('name="file"')) {
-      const filenameMatch = headerStr.match(/filename="([^"]+)"/i)
-      return { filename: filenameMatch?.[1] || 'upload.bin', data: body }
-    }
-  }
-  return null
-}
-
-// POST /api/public/upload
+// ===== 【升级2】POST /api/public/upload - 文件上传接口 =====
+// 支持微信小程序 wx.uploadFile 的 multipart/form-data 格式
 router.post('/upload', (req, res) => {
   const startTime = Date.now()
   const contentType = req.headers['content-type'] || ''
@@ -483,7 +599,7 @@ router.post('/upload', (req, res) => {
   const boundary = boundaryMatch[1].trim()
   const chunks = []
   let totalSize = 0
-  const maxSize = 50 * 1024 * 1024
+  const maxSize = 50 * 1024 * 1024 // 50MB
 
   req.on('data', chunk => {
     totalSize += chunk.length
@@ -504,13 +620,19 @@ router.post('/upload', (req, res) => {
       fs.writeFileSync(filePath, result.data)
 
       const ext = path.extname(result.filename).toLowerCase()
-      const pageCount = ext === '.pdf' ? detectPdfPages(filePath) : 1
+      let pageCount = 1
+      if (ext === '.pdf') {
+        pageCount = detectPdfPages(filePath)
+      } else if (['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'].includes(ext)) {
+        pageCount = 1
+      }
 
       const { proto, host } = normalizeHost(req)
       const fileUrl = `${proto}://${host}/uploads/${fileName}`
 
       console.log(`[UPLOAD] ${result.filename}, ${result.data.length}B, ${pageCount}页, ${Date.now() - startTime}ms`)
       ok(res, { url: fileUrl, name: result.filename, size: result.data.length, pageCount })
+
     } catch (err) {
       console.error('[UPLOAD] 处理失败:', err.message)
       fail(res, 500, '文件处理失败: ' + err.message)
@@ -525,6 +647,20 @@ router.post('/upload', (req, res) => {
 
 // 静态文件访问
 router.use('/uploads', express.static(uploadDir))
+
+// ===== POST /api/public/device/sync =====
+// 【升级v2】游客设备ID同步（无账号模式下同步设备标识）
+router.post('/device/sync', async (req, res) => {
+  try {
+    const { deviceId } = req.body
+    if (!deviceId) return fail(res, 400, '缺少deviceId')
+    // 设备同步记录（仅记录，不创建用户）
+    console.log(`[Device] 游客设备同步: ${deviceId}`)
+    ok(res, { deviceId, synced: true })
+  } catch (err) {
+    fail(res, 500, '同步失败')
+  }
+})
 
 // ===== 辅助：获取配置（带缓存）=====
 async function getConfig() {

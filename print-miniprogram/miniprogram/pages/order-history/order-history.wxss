@@ -168,6 +168,92 @@
   opacity: 0.4;
 }
 
+/* ===== 【升级v2】取单号样式 ===== */
+
+/* 游客模式提示 */
+.guest-tip {
+  background: linear-gradient(135deg, #E8F4FD, #D6EBFF);
+  color: #007AFF;
+  font-size: 24rpx;
+  padding: 14rpx 24rpx;
+  border-radius: var(--radius);
+  margin-bottom: 20rpx;
+  text-align: center;
+}
+
+/* 订单头部取单号标签 */
+.pickup-badge {
+  display: inline-flex;
+  align-items: center;
+  background: #007AFF;
+  border-radius: 8rpx;
+  padding: 4rpx 12rpx;
+  gap: 6rpx;
+  margin-right: 12rpx;
+}
+
+.pickup-label {
+  font-size: 20rpx;
+  color: rgba(255,255,255,0.8);
+}
+
+.pickup-code {
+  font-size: 22rpx;
+  color: #fff;
+  font-weight: 700;
+  font-family: 'Courier New', monospace;
+}
+
+.order-header .with-seq {
+  font-size: 24rpx;
+  color: var(--label);
+}
+
+/* 打印完成取单横幅 */
+.pickup-banner {
+  margin: 16rpx 0;
+  background: linear-gradient(135deg, #007AFF, #5AC8FA);
+  border-radius: var(--radius);
+  padding: 24rpx;
+}
+
+.pickup-inner {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.pickup-icon {
+  font-size: 40rpx;
+  flex-shrink: 0;
+}
+
+.pickup-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+}
+
+.pickup-main {
+  font-size: 28rpx;
+  color: #fff;
+  font-weight: 600;
+}
+
+.pickup-code-large {
+  font-size: 40rpx;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: 4rpx;
+  font-family: 'Courier New', monospace;
+  margin-left: 8rpx;
+}
+
+.pickup-sub {
+  font-size: 22rpx;
+  color: rgba(255,255,255,0.8);
+}
+
 .empty-text {
   font-size: 30rpx;
   font-weight: 500;

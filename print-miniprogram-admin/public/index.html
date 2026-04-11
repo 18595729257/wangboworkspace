@@ -145,20 +145,20 @@
             <input type="date" v-model="ordersFilter.dateTo">
             <button class="btn btn-sm" @click="loadOrders()" v-html="icons.search + ' 搜索'"></button>
             <button class="btn btn-sm btn-outline" @click="exportOrders()" v-html="icons.download + ' 导出CSV'"></button>
-            <button class="btn btn-sm btn-primary" @click="showBatchReprint()" :disabled="selectedFailedOrders.length === 0" v-html="icons.printer + ' 批量重打 (' + selectedFailedOrders.length + ')'"></button>
+            <button class="btn btn-sm btn-primary" @click="showBatchReprint()" :disabled="selectedReprintOrders.length === 0" v-html="icons.printer + ' 批量重打 (' + selectedReprintOrders.length + ')'"></button>
           </div>
 
           <table class="data-table">
             <thead><tr>
-              <th style="width:36px"><input type="checkbox" @change="toggleAllFailed($event)" :checked="allFailedSelected" :disabled="failedOrderCount === 0" title="全选失败订单"></th>
+              <th style="width:36px"><input type="checkbox" @change="toggleAllFailed($event)" :checked="allFailedSelected" :disabled="failedOrderCount === 0" title="全选可重打订单"></th>
               <th>订单号</th><th>类型</th><th>用户</th><th>文件</th><th>设置</th>
-              <th>打印费</th><th>服务费</th><th>实付</th>
+              <th>取单号</th><th>打印费</th><th>服务费</th><th>实付</th>
               <th>状态</th><th>时间</th><th>操作</th>
             </tr></thead>
             <tbody>
               <tr v-for="o in orders.list" :key="o.id">
                 <td>
-                  <input v-if="o.status === 'print_failed'" type="checkbox" :checked="selectedOrderIds.includes(o.id)" @change="toggleOrderSelect(o.id)">
+                  <input v-if="['paid','printing','completed','print_failed'].includes(o.status)" type="checkbox" :checked="selectedOrderIds.includes(o.id)" @change="toggleOrderSelect(o.id)">
                 </td>
                 <td class="mono">{{ o.order_no }}</td>
                 <td><span class="badge badge-type">{{ orderTypeText(o.order_type) }}</span></td>
@@ -168,6 +168,10 @@
                 <td>¥{{ o.print_fee }}</td>
                 <td>¥{{ o.service_fee }}</td>
                 <td><strong>¥{{ o.actual_pay }}</strong></td>
+                <td>
+                  <span v-if="o.printSeq" class="badge badge-seq">{{ o.printSeq }}</span>
+                  <span v-else class="text-muted">—</span>
+                </td>
                 <td><span :class="'badge badge-' + o.status">{{ statusText(o.status) }}</span></td>
                 <td>{{ formatDate(o.created_at) }}</td>
                 <td>
@@ -579,7 +583,7 @@
         </div>
         <!-- 批量重打 -->
         <div v-if="modal.type === 'batchReprint'">
-          <p style="margin-bottom:12px">已选中 <strong style="color:var(--red)">{{ modal.data.orderCount }}</strong> 个失败订单，将重新打印。</p>
+          <p style="margin-bottom:12px">已选中 <strong style="color:var(--blue)">{{ modal.data.orderCount }}</strong> 个订单，将重新分发打印任务。</p>
           <div class="form-row">
             <label>选择打印机（目标打印机）</label>
             <div class="printer-list">

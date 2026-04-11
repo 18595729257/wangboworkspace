@@ -1,6 +1,11 @@
-<!--pages/order-history/order-history.wxml-->
+<!--pages/order-history/order-history.wxml - 【升级v2】：取单号显示 + 游客模式提示-->
 <wxs src="/utils/format.wxs" module="fmt" />
 <view class="container">
+  <!-- 游客模式提示 -->
+  <view wx:if="{{isGuest}}" class="guest-tip">
+    <text>📋 游客模式 · 订单仅保存在本设备</text>
+  </view>
+
   <!-- 状态筛选 -->
   <view class="status-filter">
     <scroll-view scroll-x class="filter-scroll">
@@ -28,12 +33,17 @@
   <view wx:if="{{orders.length > 0}}" class="order-list">
     <view class="order-item" wx:for="{{orders}}" wx:key="orderNo" bindtap="viewOrder" data-orderno="{{item.orderNo}}">
       <view class="order-header">
-        <view class="order-no">{{item.orderNo}}</view>
+        <!-- 【升级v2】取单号显示 -->
+        <view wx:if="{{item.printSeq}}" class="pickup-badge">
+          <text class="pickup-label">取单号</text>
+          <text class="pickup-code">{{item.printSeq}}</text>
+        </view>
+        <view class="order-no {{item.printSeq ? 'with-seq' : ''}}">{{item.orderNo}}</view>
         <view class="order-status {{getStatusClass(item.status)}}">
           <text>{{getStatusText(item.status)}}</text>
         </view>
       </view>
-      
+
       <view class="order-body">
         <view class="file-info">
           <view class="file-icon">📎</view>
@@ -47,7 +57,18 @@
           <view class="price-time">{{fmt.formatTime(item.createTime)}}</view>
         </view>
       </view>
-      
+
+      <!-- 打印完成自动展示取单号 -->
+      <view wx:if="{{item.status === 'completed' && item.printSeq}}" class="pickup-banner">
+        <view class="pickup-inner">
+          <text class="pickup-icon">🏷️</text>
+          <view class="pickup-info">
+            <text class="pickup-main">取单号：<text class="pickup-code-large">{{item.printSeq}}</text></text>
+            <text class="pickup-sub">凭此编号到打印机处取件</text>
+          </view>
+        </view>
+      </view>
+
       <view class="order-footer">
         <view class="order-time">创建时间：{{fmt.formatTime(item.createTime)}}</view>
         <view class="order-actions">

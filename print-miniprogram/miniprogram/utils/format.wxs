@@ -1,42 +1,45 @@
-// utils/format.wxs - WXML格式化工具
-function formatPrice(price) {
-  if (price === null || price === undefined || price === '') return '0.00'
-  var num = parseFloat(price)
-  if (isNaN(num)) return '0.00'
-  return num.toFixed(2)
-}
-
-function formatSize(bytes) {
-  if (!bytes) return '0 KB'
-  return (bytes / 1024).toFixed(1) + ' KB'
-}
-
-function formatTime(dateStr) {
-  if (!dateStr) return ''
-  var d = parseDate(dateStr)
-  if (!d) return dateStr
-  var y = d.getFullYear()
-  var m = padZero(d.getMonth() + 1)
-  var day = padZero(d.getDate())
-  var h = padZero(d.getHours())
-  var min = padZero(d.getMinutes())
-  return y + '-' + m + '-' + day + ' ' + h + ':' + min
-}
-
-function parseDate(str) {
-  if (typeof str !== 'string') return null
-  var s = str.replace('T', ' ').substring(0, 19)
-  var t = Date.parse(s)
-  if (!isNaN(t)) return new Date(t)
-  return null
-}
-
-function padZero(n) {
-  return n < 10 ? '0' + n : '' + n
-}
-
 module.exports = {
-  formatPrice: formatPrice,
-  formatSize: formatSize,
-  formatTime: formatTime
+  formatPrice: function(price) {
+    if (price === null || price === undefined || price === '') return '0.00'
+    var num = parseFloat(price)
+    if (isNaN(num)) return '0.00'
+    return num.toFixed(2)
+  },
+
+  formatSize: function(bytes) {
+    if (!bytes) return '0 KB'
+    return (bytes / 1024).toFixed(1) + ' KB'
+  },
+
+  formatTime: function(dateStr) {
+    if (!dateStr) return ''
+    var s = '' + dateStr
+    // 找 T 或空格，分割日期和时间
+    var tIdx = s.indexOf('T')
+    var spaceIdx = s.indexOf(' ')
+    var sep = tIdx >= 0 ? tIdx : spaceIdx
+    if (sep < 0) return s
+    // 日期部分：取 T 前的 yyyy-MM-dd
+    var datePart = s.substring(0, sep)
+    var ymd = datePart
+    var dp = ymd.split('-')
+    if (dp.length !== 3) return ymd
+    var y = dp[0], m = dp[1], d = dp[2]
+    // 时间部分：T 之后的内容
+    var rawTime = s.substring(sep + 1)
+    // 去掉 .xxx（毫秒）和 Z / +08:00 等时区后缀
+    // 找第一个非数字非冒号字符
+    var dot = rawTime.indexOf('.')
+    var timeOnly = dot >= 0 ? rawTime.substring(0, dot) : rawTime
+    var z = timeOnly.indexOf('Z')
+    if (z >= 0) timeOnly = timeOnly.substring(0, z)
+    var plus = timeOnly.indexOf('+')
+    if (plus >= 0) timeOnly = timeOnly.substring(0, plus)
+    // timeOnly 现在是纯 hh:mm:ss
+    var p = timeOnly.split(':')
+    var h = (p[0] && p[0].length > 0) ? p[0] : '00'
+    var mn = (p[1] && p[1].length > 0) ? p[1] : '00'
+    var sec = (p[2] && p[2].length > 0) ? p[2] : '00'
+    return y + '-' + m + '-' + d + ' ' + h + ':' + mn + ':' + sec
+  }
 }

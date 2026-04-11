@@ -1,6 +1,16 @@
-<!--pages/order-detail/order-detail.wxml-->
+<!--pages/order-detail/order-detail.wxml - 【升级v2】：取单号显示 + 打印完成横幅-->
 <wxs src="/utils/format.wxs" module="fmt" />
 <view class="container">
+
+  <!-- 【升级v2】打印完成取单横幅（醒目展示） -->
+  <view wx:if="{{showPickupBanner && orderInfo.printSeq}}" class="pickup-hero">
+    <view class="pickup-hero-inner">
+      <view class="pickup-hero-label">🏷️ 打印完成 · 请取件</view>
+      <view class="pickup-hero-code">{{orderInfo.printSeq}}</view>
+      <view class="pickup-hero-tip">取单号</view>
+    </view>
+  </view>
+
   <!-- 订单状态 -->
   <view wx:if="{{orderInfo}}" class="status-banner status-{{orderInfo.status}}">
     <view class="status-icon">
@@ -22,28 +32,34 @@
   <!-- 订单信息 -->
   <view wx:if="{{orderInfo}}" class="card">
     <view class="card-title">订单信息</view>
-    
+
     <view class="info-list">
       <view class="info-item">
         <text class="info-label">订单号</text>
         <text class="info-value">{{orderInfo.orderNo}}</text>
       </view>
-      
+
+      <!-- 【升级v2】取单号（仅文档类订单且有取单号时显示） -->
+      <view class="info-item" wx:if="{{orderInfo.isDocOrder && orderInfo.printSeq}}">
+        <text class="info-label">取单号</text>
+        <text class="info-value pickup-code-text">{{orderInfo.printSeq}}</text>
+      </view>
+
       <view class="info-item">
         <text class="info-label">创建时间</text>
         <text class="info-value">{{fmt.formatTime(orderInfo.createTime)}}</text>
       </view>
-      
+
       <view class="info-item" wx:if="{{orderInfo.payTime}}">
         <text class="info-label">支付时间</text>
         <text class="info-value">{{fmt.formatTime(orderInfo.payTime)}}</text>
       </view>
-      
+
       <view class="info-item" wx:if="{{orderInfo.printStartTime}}">
         <text class="info-label">开始打印</text>
         <text class="info-value">{{fmt.formatTime(orderInfo.printStartTime)}}</text>
       </view>
-      
+
       <view class="info-item" wx:if="{{orderInfo.printEndTime}}">
         <text class="info-label">打印完成</text>
         <text class="info-value">{{fmt.formatTime(orderInfo.printEndTime)}}</text>
@@ -54,7 +70,7 @@
   <!-- 文件信息 -->
   <view wx:if="{{orderInfo}}" class="card">
     <view class="card-title">文件信息</view>
-    
+
     <view class="file-card">
       <view class="file-icon">📎</view>
       <view class="file-info">
@@ -67,24 +83,24 @@
   <!-- 价格明细 -->
   <view wx:if="{{orderInfo}}" class="card price-card">
     <view class="card-title">价格明细</view>
-    
+
     <view class="price-row">
       <text class="price-label">打印费用</text>
       <text class="price-value">¥{{fmt.formatPrice(orderInfo.printFee)}}</text>
     </view>
-    
+
     <view class="price-row">
       <text class="price-label">服务费</text>
       <text class="price-value">¥{{fmt.formatPrice(orderInfo.serviceFee)}}</text>
     </view>
-    
+
     <view wx:if="{{orderInfo.pointsDiscount > 0}}" class="price-row discount">
       <text class="price-label">积分抵扣（{{orderInfo.pointsUsed}}积分）</text>
       <text class="price-value">-¥{{fmt.formatPrice(orderInfo.pointsDiscount)}}</text>
     </view>
-    
+
     <view class="divider"></view>
-    
+
     <view class="price-row total">
       <text class="price-label">实付金额</text>
       <text class="price-value price-large">¥{{fmt.formatPrice(orderInfo.actualPay)}}</text>

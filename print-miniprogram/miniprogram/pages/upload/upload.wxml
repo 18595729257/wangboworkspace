@@ -15,7 +15,11 @@
         <view class="file-icon">📎</view>
         <view class="file-detail">
           <view class="file-name">{{selectedFile.name}}</view>
-          <view class="file-size">{{selectedFile.sizeText}}</view>
+          <view class="file-meta">
+            <text class="file-size">{{selectedFile.sizeText}}</text>
+            <text wx:if="{{uploading}}" class="file-page-status parsing">解析页数中...</text>
+            <text wx:elif="{{serverPageCount}}" class="file-page-status ready">共{{serverPageCount}}页</text>
+          </view>
         </view>
       </view>
       <view class="file-remove" bindtap="removeFile">✕</view>
@@ -54,6 +58,18 @@
       </view>
     </view>
     
+    <view class="setting-item">
+      <view class="setting-label">单双面</view>
+      <view class="setting-options">
+        <view class="option {{duplex === 'single' ? 'active' : ''}}" data-duplex="single" bindtap="setDuplex">
+          <text>单面</text>
+        </view>
+        <view class="option {{duplex === 'double' ? 'active' : ''}}" data-duplex="double" bindtap="setDuplex">
+          <text>双面</text>
+        </view>
+      </view>
+    </view>
+
     <view class="setting-item">
       <view class="setting-label">纸张大小</view>
       <view class="setting-options">
@@ -121,8 +137,9 @@
 
   <!-- 提交按钮 -->
   <view class="submit-area">
-    <button class="btn-primary submit-btn" disabled="{{!selectedFile || loading}}" bindtap="createOrderAndPay">
-      <text wx:if="{{loading}}">创建中...</text>
+    <button class="btn-primary submit-btn" disabled="{{!selectedFile || loading || uploading}}" bindtap="createOrderAndPay">
+      <text wx:if="{{uploading}}">解析页数中...</text>
+      <text wx:elif="{{loading}}">创建中...</text>
       <text wx:else>立即支付 ¥{{actualPay}}</text>
     </button>
     <view class="submit-hint">支付后自动进入打印队列</view>

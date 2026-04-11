@@ -123,11 +123,14 @@ function detectPdfPages(filePath) {
 
 // 统一域名（避免证书问题）
 function normalizeHost(req) {
-  const proto = req.headers['x-forwarded-proto'] || 'https'
+  const proto = req.headers['x-forwarded-proto'] || (req.headers['x-forwarded-port'] === '443' ? 'https' : 'http')
   const forwardedHost = req.headers['x-forwarded-host'] || ''
-  const isIpOnly = /^\d+\.\d+\.\d+\.\d+$/.test(forwardedHost)
-  const host = (forwardedHost && !isIpOnly) ? forwardedHost : 'xinbingcloudprint.top'
-  return { proto, host, url: (proto) + '://' + host }
+  const reqHost = req.headers.host || ''
+  // 优先用实际请求的 host（IP 或域名），不强制替换成域名
+  const host = forwardedHost || reqHost || 'xinbingcloudprint.top'
+  // 域名强制 HTTPS（阿里云拦截 HTTP，HTTPS 正常）
+  const finalProto = (host === 'xinbingcloudprint.top') ? 'https' : proto
+  return { proto: finalProto, host, url: finalProto + '://' + host }
 }
 
 module.exports = {

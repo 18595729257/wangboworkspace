@@ -72,6 +72,29 @@
   margin-top: 4rpx;
 }
 
+.file-meta {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  margin-top: 4rpx;
+}
+
+.file-page-status {
+  font-size: 22rpx;
+  padding: 2rpx 12rpx;
+  border-radius: 6rpx;
+}
+
+.file-page-status.parsing {
+  color: var(--orange, #FF9500);
+  background: rgba(255, 149, 0, 0.1);
+}
+
+.file-page-status.ready {
+  color: var(--green, #34C759);
+  background: rgba(52, 199, 89, 0.1);
+}
+
 .file-remove {
   width: 44rpx;
   height: 44rpx;

@@ -70,9 +70,31 @@ function getUserInfo(openid) {
   return get(`/api/public/user/${openid}`)
 }
 
-// 获取用户订单列表
-function getUserOrders(openid, page, pageSize) {
-  return get(`/api/public/user/${openid}/orders`, { page, pageSize })
+// 获取用户订单列表（支持游客+账号模式）
+// 优先传 openid（账号），deviceId 补充（游客）
+function getUserOrders(openid, page, pageSize, deviceId) {
+  if (openid) {
+    return get(`/api/public/user/${openid}/orders`, { page, pageSize })
+  }
+  // 游客模式：通过新接口按 deviceId 查
+  if (deviceId) {
+    return get(`/api/public/orders/me`, { page, pageSize, deviceId })
+  }
+  return Promise.reject({ msg: '缺少标识' })
+}
+
+// 获取当前用户所有订单（账号用openid，游客用deviceId）
+// openid/deviceId 二选一，由调用方根据登录状态决定
+function getMyOrders(page, pageSize, deviceId, openid) {
+  const params = { page, pageSize }
+  if (deviceId) params.deviceId = deviceId
+  else if (openid) params.openid = openid
+  return get(`/api/public/orders/me`, params)
+}
+
+// 同步设备ID到服务端
+function syncDeviceId(deviceId) {
+  return post('/api/public/device/sync', { deviceId })
 }
 
 // 获取公开配置
@@ -152,7 +174,7 @@ function uploadFile(filePath, name) {
 
 module.exports = {
   request, get, post, put,
-  wxLogin, getUserInfo, getUserOrders, getConfig,
+  wxLogin, getUserInfo, getUserOrders, getMyOrders, getConfig,
   createOrder, getOrder, cancelOrder, payCallback,
-  getQueueStatus, uploadFile
+  getQueueStatus, uploadFile, syncDeviceId
 }
