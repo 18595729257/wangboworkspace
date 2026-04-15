@@ -108,9 +108,6 @@ function printFile(filePath, options = {}) {
   return new Promise((resolve, reject) => {
     if (!fs.existsSync(filePath)) return reject(new Error('文件不存在: ' + filePath))
 
-    const ext = path.extname(filePath).toLowerCase()
-    if (ext !== '.pdf') return reject(new Error('只支持 PDF，当前: ' + ext))
-
     const printer = options.printer || ''
     const copies = parseInt(options.copies) || 1
     const duplex = options.duplex || 'single'
@@ -119,10 +116,14 @@ function printFile(filePath, options = {}) {
 
     if (!printer) return reject(new Error('未指定打印机'))
 
-    try {
-      const header = fs.readFileSync(filePath).slice(0, 5).toString()
-      if (!header.startsWith('%PDF')) return reject(new Error('不是有效 PDF'))
-    } catch (e) { return reject(new Error('无法读取: ' + e.message)) }
+    const ext = path.extname(filePath).toLowerCase()
+    const isPdf = ext === '.pdf'
+    if (isPdf) {
+      try {
+        const header = fs.readFileSync(filePath).slice(0, 5).toString()
+        if (!header.startsWith('%PDF')) return reject(new Error('PDF 文件无效'))
+      } catch (e) { return reject(new Error('无法读取文件: ' + e.message)) }
+    }
 
     const fileSize = fs.statSync(filePath).size
 
@@ -137,7 +138,13 @@ function printFile(filePath, options = {}) {
     const startTime = Date.now()
 
     if (platform === 'win32') {
-      _printSumatra(filePath, printer, copies, duplex, totalPages, orderNo, startTime, resolve, reject)
+      if (isPdf) {
+        // PDF 用 SumatraPDF
+        _printSumatra(filePath, printer, copies, duplex, totalPages, orderNo, startTime, resolve, reject)
+      } else {
+        // Office 文件用 COM 直接打印（快），失败自动降级为 LibreOffice 转 PDF
+        _printOfficeCOM(filePath, printer, copies, duplex, totalPages, orderNo, startTime, resolve, reject)
+      }
     } else {
       _printLp(filePath, printer, copies, duplex, totalPages, orderNo, startTime, resolve, reject)
     }
@@ -171,7 +178,141 @@ function endProgress() {
   process.stdout.write('\r' + ' '.repeat(90) + '\n')
 }
 
-// ===== 6. SumatraPDF（Windows）=====
+// ===== 6. Office COM 直接打印（Windows，非 PDF 文件）=====
+// 用 Word/Excel/PPT 的 COM 对象后台静默打印，无需转 PDF，速度最快
+// COM 失败时自动降级为 LibreOffice → PDF → SumatraPDF
+function _printOfficeCOM(filePath, printer, copies, duplex, totalPages, orderNo, startTime, resolve, reject) {
+  const ext = path.extname(filePath).toLowerCase()
+  const totalSheets = duplex === 'double' ? Math.ceil(totalPages / 2) : totalPages
+
+  process.stdout.write('\r执行打印命令 (WPS/Office COM)...')
+  startProgress(orderNo, totalSheets * copies, startTime)
+
+  const psScript = _buildCOMScript(ext, filePath, printer, copies)
+  if (psScript.startsWith('error:')) {
+    endProgress()
+    process.stdout.write('\r\u274C ' + psScript.substring(6) + '，降级为 LibreOffice...\n')
+    return _printLibreOffice(filePath, printer, copies, duplex, totalPages, orderNo, startTime, resolve, reject)
+  }
+
+  // 用 UTF-16LE 编码 PowerShell 脚本，支持中文打印机名
+  const b64 = Buffer.from(psScript, 'utf16le').toString('base64')
+  const cmd = 'chcp 65001 >nul & powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand ' + b64
+
+  exec(cmd, { timeout: 600000 }, (error, stdout, stderr) => {
+    endProgress()
+    const sec = Math.floor((Date.now() - startTime) / 1000)
+    const min = Math.floor(sec / 60)
+    const ts = min > 0 ? min + '分' + (sec % 60) + '秒' : sec + '秒'
+    const output = (stdout || '').trim()
+
+    if (error || output.startsWith('error:')) {
+      const errMsg = output.startsWith('error:') ? output.substring(6).trim() : (error?.message || '未知错误')
+      process.stdout.write('\r\u274C COM打印失败 (' + ts + '): ' + errMsg + '\n')
+      process.stdout.write('\r↩ 降级为 LibreOffice 转 PDF 打印...\n')
+      // 降级到 LibreOffice 方案（重新开始计时）
+      const fallbackStart = Date.now()
+      _printLibreOffice(filePath, printer, copies, duplex, totalPages, orderNo, fallbackStart, resolve, reject)
+    } else {
+      process.stdout.write('\r\u2705 打印成功: ' + path.basename(filePath) + ' (' + ext + ', ' + ts + ')\n')
+      resolve({ success: true, file: filePath, pages: totalPages })
+    }
+  })
+}
+
+// 生成 COM 打印的 PowerShell 脚本
+function _buildCOMScript(ext, filePath, printer, copies) {
+  const escPath = filePath.replace(/'/g, "''")
+  const escPrinter = printer.replace(/'/g, "''")
+  const cleanup = `
+      if ($doc) { try { $doc.Close($false) } catch {} }
+      if ($app) { try { $app.Quit() } catch {} }
+      if ($doc) { [System.Runtime.Interopservices.Marshal]::ReleaseComObject($doc) | Out-Null }
+      if ($app) { [System.Runtime.Interopservices.Marshal]::ReleaseComObject($app) | Out-Null }
+      [System.GC]::Collect(); [System.GC]::WaitForPendingFinalizers()`
+
+  if (ext === '.docx' || ext === '.doc') {
+    return `
+$ErrorActionPreference = 'Stop'
+$app = $null; $doc = $null
+try {
+  try { $app = New-Object -ComObject KWps.Application } catch {}
+  if (-not $app) { try { $app = New-Object -ComObject Word.Application } catch {} }
+  if (-not $app) { throw 'WPS/Word COM 不可用' }
+  $app.Visible = $false
+  $app.DisplayAlerts = 0
+  $doc = $app.Documents.Open('${escPath}', $false, $true, $false)
+  if (-not $doc) { throw '打开文档失败' }
+  $app.ActivePrinter = '${escPrinter}'
+  $doc.PrintOut($false, $false, 0, '', '', '', 0, ${copies})
+  while ($app.BackgroundPrintingStatus -gt 0) { Start-Sleep -Milliseconds 500 }
+  $doc.Close($false)
+  $app.Quit()
+  Write-Output 'ok'
+} catch {
+  Write-Output ('error:' + $_.Exception.Message)${cleanup}
+} finally {${cleanup}}`
+  } else if (ext === '.xlsx' || ext === '.xls') {
+    return `
+$ErrorActionPreference = 'Stop'
+$app = $null; $wb = $null
+try {
+  try { $app = New-Object -ComObject Ket.Application } catch {}
+  if (-not $app) { try { $app = New-Object -ComObject Excel.Application } catch {} }
+  if (-not $app) { throw 'WPS表格/Excel COM 不可用' }
+  $app.Visible = $false
+  $app.DisplayAlerts = $false
+  $wb = $app.Workbooks.Open('${escPath}', $false, $true)
+  if (-not $wb) { throw '打开工作簿失败' }
+  $app.ActivePrinter = '${escPrinter}'
+  $wb.PrintOut(1, $wb.Sheets.Count, ${copies}, $false)
+  $wb.Close($false)
+  $app.Quit()
+  Write-Output 'ok'
+} catch {
+  Write-Output ('error:' + $_.Exception.Message)
+  if ($wb) { try { $wb.Close($false) } catch {} }
+  if ($app) { try { $app.Quit() } catch {} }
+  if ($wb) { [System.Runtime.Interopservices.Marshal]::ReleaseComObject($wb) | Out-Null }
+  if ($app) { [System.Runtime.Interopservices.Marshal]::ReleaseComObject($app) | Out-Null }
+  [System.GC]::Collect(); [System.GC]::WaitForPendingFinalizers()
+} finally {
+  if ($wb) { [System.Runtime.Interopservices.Marshal]::ReleaseComObject($wb) | Out-Null }
+  if ($app) { [System.Runtime.Interopservices.Marshal]::ReleaseComObject($app) | Out-Null }
+  [System.GC]::Collect(); [System.GC]::WaitForPendingFinalizers()
+}`
+  } else if (ext === '.pptx' || ext === '.ppt') {
+    return `
+$ErrorActionPreference = 'Stop'
+$app = $null; $pres = $null
+try {
+  try { $app = New-Object -ComObject Kwpp.Application } catch {}
+  if (-not $app) { try { $app = New-Object -ComObject PowerPoint.Application } catch {} }
+  if (-not $app) { throw 'WPS演示/PPT COM 不可用' }
+  $app.Visible = 1
+  $app.DisplayAlerts = 1
+  $pres = $app.Presentations.Open('${escPath}')
+  $pres.PrintOut(1, -1, '', ${copies})
+  $pres.Close()
+  $app.Quit()
+  Write-Output 'ok'
+} catch {
+  Write-Output ('error:' + $_.Exception.Message)
+  if ($pres) { try { $pres.Close() } catch {} }
+  if ($app) { try { $app.Quit() } catch {} }
+  if ($pres) { [System.Runtime.Interopservices.Marshal]::ReleaseComObject($pres) | Out-Null }
+  if ($app) { [System.Runtime.Interopservices.Marshal]::ReleaseComObject($app) | Out-Null }
+  [System.GC]::Collect(); [System.GC]::WaitForPendingFinalizers()
+} finally {
+  if ($pres) { [System.Runtime.Interopservices.Marshal]::ReleaseComObject($pres) | Out-Null }
+  if ($app) { [System.Runtime.Interopservices.Marshal]::ReleaseComObject($app) | Out-Null }
+  [System.GC]::Collect(); [System.GC]::WaitForPendingFinalizers()
+}`
+  }
+  return 'error:不支持的文件格式: ' + ext
+}
+
+// ===== 7. SumatraPDF（Windows PDF）=====
 function _printSumatra(filePath, printer, copies, duplex, totalPages, orderNo, startTime, resolve, reject) {
   const exe = findSumatraPDF()
   if (!exe) return reject(new Error(
@@ -214,7 +355,139 @@ function _printSumatra(filePath, printer, copies, duplex, totalPages, orderNo, s
   })
 }
 
-// ===== 7. lp（macOS/Linux）=====
+// ===== 8. Windows LibreOffice 打印（非 PDF，COM 降级方案）=====
+// LibreOffice 不支持直接打印到打印机，需要先转 PDF，再用 SumatraPDF 打印
+// 整个过程后台自动完成，用户无感知
+function _printLibreOffice(filePath, printer, copies, duplex, totalPages, orderNo, startTime, resolve, reject) {
+  const ext = path.extname(filePath).toLowerCase()
+  const loExe = findLibreOffice()
+  if (!loExe) {
+    return reject(new Error(
+      '找不到 LibreOffice！\n' +
+      '请下载: https://www.libreoffice.org/download/download-libreoffice/\n' +
+      '安装后重启客户端。'
+    ))
+  }
+
+  const sumatra = findSumatraPDF()
+  if (!sumatra) {
+    return reject(new Error(
+      '找不到 SumatraPDF！\n请下载: https://www.sumatrapdfreader.org/download-free-pdf-viewer'
+    ))
+  }
+
+  // 临时目录用 C:\temp 避开中文用户名路径（LibreOffice 不支持非 ASCII 路径）
+  const tmpDir = path.join('C:\\temp', 'print-lo-' + Date.now())
+  if (!fs.existsSync('C:\\temp')) fs.mkdirSync('C:\\temp', { recursive: true })
+  if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true })
+
+  const duplexSwitch = duplex === 'double' ? ' -print-settings dupx' : ''
+  const totalSheets = duplex === 'double' ? Math.ceil(totalPages / 2) : totalPages
+
+  process.stdout.write('\r[1/2] LibreOffice 转PDF...')
+  startProgress(orderNo, totalSheets * copies, startTime)
+
+  // 第一步：LibreOffice 转 PDF
+  const loCmd = '"' + loExe + '" --headless --convert-to pdf --outdir "' + tmpDir + '" "' + filePath + '"'
+  // 备选：最简命令
+  const loCmdSimple = '"' + loExe + '" --headless --convert-to pdf --outdir "' + tmpDir + '" "' + filePath + '"'
+
+  exec(loCmd, { timeout: 120000 }, (loError, loStdout, loStderr) => {
+    // 错误时打印 stdout + stderr 帮助诊断
+    if (loError) {
+      endProgress()
+      const loStd = (loStdout || '').trim()
+      const loErr = (loStderr || '').trim()
+      const diag = loStd || loErr || loError.message
+      process.stdout.write('\r\u274C LibreOffice 转换失败 (' + ext + '): ' + diag + '\n')
+      // 尝试备选最简命令
+      process.stdout.write('\r↩ 尝试备选命令...\n')
+      exec(loCmdSimple, { timeout: 120000 }, (loError2, loStdout2, loStderr2) => {
+        if (loError2) {
+          endProgress()
+          const diag2 = ((loStdout2 || '') + (loStderr2 || '')).trim() || loError2.message
+          return reject(new Error('LibreOffice 转换失败: ' + diag2))
+        }
+        // 备选成功，继续找PDF并打印
+        return findPdfAndPrint()
+      })
+      return
+    }
+
+    // 找 PDF 并打印（SumatraPDF）
+    function findPdfAndPrint() {
+      let pdfFile = null
+      try {
+        const files = fs.readdirSync(tmpDir)
+        pdfFile = files.find(f => f.toLowerCase().endsWith('.pdf'))
+        if (pdfFile) pdfFile = path.join(tmpDir, pdfFile)
+      } catch {}
+
+      if (!pdfFile || !fs.existsSync(pdfFile)) {
+        endProgress()
+        process.stdout.write('\r\u274C 未找到生成的 PDF\n')
+        return reject(new Error('LibreOffice 未生成 PDF'))
+      }
+
+      process.stdout.write('\r[2/2] SumatraPDF 打印...')
+
+      let sumatraCmd = '"' + sumatra + '" -print-to "' + printer + '"' + duplexSwitch + ' -exit-on-print -silent "' + pdfFile + '"'
+      if (copies > 1) sumatraCmd = Array(copies).fill(sumatraCmd).join(' && ')
+
+      exec(sumatraCmd, { timeout: 600000 }, (err) => {
+        endProgress()
+        const sec = Math.floor((Date.now() - startTime) / 1000)
+        const min = Math.floor(sec / 60)
+        const ts = min > 0 ? min + '分' + (sec % 60) + '秒' : sec + '秒'
+
+        try { fs.unlinkSync(pdfFile) } catch {}
+        try { fs.rmdirSync(tmpDir) } catch {}
+
+        if (err) {
+          process.stdout.write('\r\u274C 打印失败 (' + ts + '): ' + err.message + '\n')
+          reject(new Error('打印失败: ' + err.message))
+        } else {
+          process.stdout.write('\r\u2705 打印成功: ' + path.basename(filePath) + ' (' + ext + ', ' + ts + ')\n')
+          resolve({ success: true, file: filePath, pages: totalPages })
+        }
+      })
+    }
+
+    findPdfAndPrint()
+  })
+}
+
+// ===== 9. 查找 LibreOffice =====
+function findLibreOffice() {
+  const programFiles = process.env['ProgramFiles'] || 'C:\\Program Files'
+  const programFilesX86 = process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)'
+  const candidates = [
+    path.join(programFiles, 'LibreOffice', 'program', 'soffice.exe'),
+    path.join(programFiles, 'LibreOffice', 'program', 'soffice'),
+    path.join(programFilesX86, 'LibreOffice', 'program', 'soffice.exe'),
+    path.join(programFilesX86, 'LibreOffice', 'program', 'soffice'),
+    path.join(process.env.LOCALAPPDATA || '', 'LibreOffice', 'program', 'soffice.exe'),
+    path.join(process.env.USERPROFILE || '', 'LibreOffice', 'program', 'soffice.exe'),
+    path.join(__dirname, 'soffice.exe'),
+    path.join(__dirname, 'soffice'),
+  ]
+  for (const p of candidates) {
+    if (fs.existsSync(p)) return p
+  }
+  try {
+    const found = execSync('where soffice.exe 2>nul', { encoding: 'utf8', timeout: 5000 }).trim().split('\n')[0]
+    if (found && fs.existsSync(found)) return found
+  } catch {}
+  return null
+}
+
+// ===== 10. 兼容旧函数名 =====
+function _printDefault(filePath, printer, copies, duplex, totalPages, orderNo, startTime, resolve, reject) {
+  // 直接透传到 LibreOffice 方案
+  _printLibreOffice(filePath, printer, copies, duplex, totalPages, orderNo, startTime, resolve, reject)
+}
+
+// ===== 11. lp（macOS/Linux）=====
 function _printLp(filePath, printer, copies, duplex, totalPages, orderNo, startTime, resolve, reject) {
   const opt = duplex === 'double' ? ' -o sides=two-sided-long-edge' : ' -o sides=one-sided'
   const cmd = 'lp -n ' + copies + ' -d "' + printer + '"' + opt + ' "' + filePath + '"'

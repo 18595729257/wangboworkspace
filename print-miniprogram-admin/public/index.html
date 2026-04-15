@@ -464,6 +464,35 @@
               </select>
             </div>
           </div>
+
+          <!-- 【新增】打印机分配策略 + 序号规则 -->
+          <div class="card settings-card" style="margin-top:24px">
+            <h3>打印机分配策略</h3>
+            <div class="form-row">
+              <label>分配策略</label>
+              <select v-model="config.assign_strategy">
+                <option value="by_orders">按订单数量分配（轮询均分）</option>
+                <option value="by_pages">按打印页数分配（负载均衡）</option>
+              </select>
+            </div>
+            <div class="form-hint">按页数分配：页数多的订单自动分配到累计负载最低的打印机</div>
+          </div>
+
+          <div class="card settings-card" style="margin-top:24px">
+            <h3>封面取单号规则</h3>
+            <div class="form-row">
+              <label>序号生成规则</label>
+              <select v-model="config.seq_rule">
+                <option value="daily">按日重置（每天 0001 开始）</option>
+                <option value="hourly">按小时重置（14-01, 15-01…）</option>
+              </select>
+            </div>
+            <div class="form-hint">
+              <span v-if="config.seq_rule === 'daily'">示例：今日第1单=0001，第2单=0002</span>
+              <span v-else>示例：14点第1单=14-01，15点重置为15-01</span>
+            </div>
+          </div>
+
           <div class="card settings-card">
             <h3>修改密码</h3>
             <div class="form-row">

@@ -125,17 +125,12 @@ function connectWS() {
     try {
       const msg = JSON.parse(data)
       if (msg.type === 'print_task') {
-        // 服务端推送的是 data: [order] 数组，取第一个
         const order = Array.isArray(msg.data) ? msg.data[0] : msg.data
-        if (!order) {
-          err('WS消息无订单数据')
-          return
-        }
+        if (!order) { err('WS消息无订单数据'); return }
         const printFiles = msg.printFiles?.length > 0
           ? msg.printFiles
           : [{ name: order.file_name, url: order.file_url, isCover: false }]
         const targetPrinter = msg.targetPrinter || order.printer
-        // 分配到对应打印机的队列
         assignTaskToPrinter(order, printFiles, targetPrinter)
       }
     } catch (e) { err('WS消息解析失败:', e.message) }
@@ -155,24 +150,33 @@ async function poll() {
         const printFiles = o.printFiles?.length > 0
           ? o.printFiles
           : [{ name: o.file_name, url: o.file_url, isCover: false }]
-        assignTaskToPrinter(o, printFiles, o.printer)
+        // 优先用服务端分配的打印机，否则用轮询分配的
+        const targetPrinter = o.targetPrinter || o.printer || null
+        if (targetPrinter) {
+          assignTaskToPrinter(o, printFiles, targetPrinter)
+        } else {
+          log(`⚠️ 订单 ${o.order_no} 无目标打印机，跳过`)
+        }
       })
     }
   } catch (e) { err('轮询失败:', e.message) }
 }
 
 // ===== 更新订单状态 =====
-async function updateStatus(orderNo, status, printerName, error) {
+async function updateStatus(orderNo, status, printerName, error, totalPages) {
+  const payload = { type: 'print_status', orderNo, status, printerName, error }
+  if (totalPages && totalPages > 0) payload.totalPages = totalPages
   if (wsConnected && ws?.readyState === 1) {
-    ws.send(JSON.stringify({ type: 'print_status', orderNo, status, printerName, error }))
-    log(`状态: ${orderNo} → ${status}`)
+    ws.send(JSON.stringify(payload))
+    log(`状态: ${orderNo} → ${status} (${totalPages || '?'}页)`)
     return
   }
   try {
     await api('PUT', `/api/public/order/${orderNo}/print-status`, {
-      status, clientId: config.CLIENT_ID, printerName, error
+      status, clientId: config.CLIENT_ID, printerName, error,
+      ...(totalPages && totalPages > 0 ? { totalPages } : {})
     })
-    log(`状态: ${orderNo} → ${status}`)
+    log(`状态: ${orderNo} → ${status} (${totalPages || '?'}页)`)
   } catch (e) { err(`状态更新失败: ${orderNo}`); ferr('状态更新失败:', orderNo, e.message) }
 }
 
@@ -280,8 +284,9 @@ async function executePrintTask({ order, printFiles, targetPrinter, orderNo }) {
         continue
       }
       
-      // 下载
-      const localFile = path.join(downloadDir, `order_${orderNo}_${i}_${Date.now()}.pdf`)
+      // 下载，保持原文件扩展名
+      const originalExt = (pf.name || 'file.pdf').replace(/.*(\.[^.]+)$/, '$1')
+      const localFile = path.join(downloadDir, `order_${orderNo}_${i}_${Date.now()}${originalExt}`)
       try {
         await downloadFile(fileUrl, localFile)
       } catch (e) {
@@ -319,21 +324,27 @@ async function executePrintTask({ order, printFiles, targetPrinter, orderNo }) {
       }
     }
     
+    // 计算总页数（用于按页数分配策略）
+      let orderTotalPages = 0
+      for (const pf of printFiles) {
+        orderTotalPages += pf.pageCount || 1
+      }
+    
     // 更新最终状态
     if (failedFiles.length > 0) {
       const errSummary = failedFiles.map(f => f.name + ': ' + f.err).join('; ')
-      await updateStatus(orderNo, 'print_failed', matched.name, errSummary)
+      await updateStatus(orderNo, 'print_failed', matched.name, errSummary, orderTotalPages)
       log(`❌ ${orderNo} 部分失败: ${errSummary}`)
       flog(`订单 ${orderNo} 部分失败 [${matched.name}]`)
     } else {
-      await updateStatus(orderNo, 'completed', matched.name)
+      await updateStatus(orderNo, 'completed', matched.name, null, orderTotalPages)
       log(`✅ ${orderNo} 全部完成`)
       flog(`订单 ${orderNo} 完成 [${matched.name}]`)
     }
     
   } catch (e) {
     err(`订单 ${orderNo} 异常:`, e.message)
-    await updateStatus(orderNo, 'failed', matched?.name, e.message)
+    await updateStatus(orderNo, 'failed', matched?.name, e.message)(orderNo, 'failed', matched?.name, e.message)
   } finally {
     matched.status = 'idle'
     processingOrders.delete(orderNo)

@@ -81,6 +81,8 @@ router.get('/config', async (req, res) => {
     'max_points_discount', 'enable_payment', 'enable_print',
     // 小程序首页入口开关
     'enable_upload', 'enable_idcard', 'enable_photo', 'enable_factory',
+    // 分配策略 + 序号规则（小程序需显示封面序号）
+    'assign_strategy', 'seq_rule',
   ]
   const pub = {}
   publicKeys.forEach(k => { if (config[k] !== undefined) pub[k] = config[k] })
@@ -539,8 +541,27 @@ router.get('/printer/pending', async (req, res) => {
     // 解析 files JSON，组装完整打印文件列表（封面 + 原文件）
     const { getOrderPrintFiles } = require('../services/cover')
     const ordersWithFiles = await Promise.all(orders.map(async (o) => {
+      // 查找该订单对应的打印机名称
+      let targetPrinter = null
+      if (o.printer_id) {
+        const printer = await db.getOne('SELECT name FROM printers WHERE id = ?', [o.printer_id])
+        targetPrinter = printer?.name || null
+      }
+      // 如果没有指定打印机，自动分配一台
+      if (!targetPrinter) {
+        const { getAssignStrategy } = require('../services/websocket')
+        const strategy = await getAssignStrategy()
+        const { allocatePrinter } = require('../services/websocket')
+        const result = await allocatePrinter(o)
+        if (result) {
+          targetPrinter = result.target.printer.name
+          // 更新数据库 printer_id
+          await db.query('UPDATE orders SET printer_id = ? WHERE order_no = ?', [result.target.printer.id, o.order_no])
+          console.log(`[分配] 订单 ${o.order_no} (轮询补充分配, ${result.method}) → ${targetPrinter}`)
+        }
+      }
       const files = await getOrderPrintFiles(o)
-      return { ...o, printFiles: files }
+      return { ...o, printFiles: files, targetPrinter }
     }))
 
     ok(res, ordersWithFiles)
